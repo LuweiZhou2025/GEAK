@@ -1,0 +1,37 @@
+{
+  "run_id": "mimo_fp8bs_moe_ep8-citations",
+  "date": "2026-11-18",
+  "kernel_names": [
+    "mimo_fp8bs_moe_ep8"
+  ],
+  "validation_status": "accepted",
+  "box_quiet": true,
+  "held_out": false,
+  "cards": [],
+  "citations": [
+    {
+      "card": "a-contract-fixed-short-k-loop-closes-the-inner-loop-axes-moe-grouped-gemm-gfx950-mixed.md",
+      "round": 1,
+      "direction": "r1_d1",
+      "specialty": "compute",
+      "cited_then_verified": 1.01503,
+      "became_winner": false
+    },
+    {
+      "card": "32x32-mfma-remap-carries-a-block-scale-moe-grouped-gemm-epil-moe-grouped-gemm-gfx950-both.md",
+      "round": 1,
+      "direction": "r1_d1",
+      "specialty": "compute",
+      "cited_then_verified": 1.01503,
+      "became_winner": false
+    },
+    {
+      "card": "block-scale-moe-grouped-gemm-fund-the-scale-metadata-path-no-moe-grouped-gemm-gfx950-both.md",
+      "round": 1,
+      "direction": "r1_d1",
+      "specialty": "compute",
+      "cited_then_verified": 1.01503,
+      "became_winner": false
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "engineer_id": "r2_d0",
+  "specialty": "memory",
+  "task": "XCD-aware CTA remap on the live gemm1 (stage1) to cut replicated-X L2 misses under the power cap",
+  "strategy": "Implemented a bijective, device-side XCD remap for moe_fp8bs_gemm1 (flydsl_moe_fp8bs.py). It uses a 1-D grid, logical XCD = raw % nx, N-tile group x contiguous M partition derived from num_valid_ids, chunk-interleaved N- or M-fastest orders, and an expert-run (ballot) order. There is no device loop, and the s1() signature is unchanged. It was proven bijective on host for all n_mblk in [1,4352] and bit-identical on device. It was swept with PMC plus in-process and harness timing. No variant beat the canonical, so nothing is shipped (the code is kept default-OFF, with a reference diff).",
+  "speedup_geomean": 1.5326,
+  "speedup_arithmetic": 1.5331,
+  "speedup_weighted": 1.5321,
+  "per_case": [
+    {
+      "name": "tpr2048",
+      "baseline_ms": 1.6747,
+      "optimized_ms": 1.1212,
+      "speedup": 1.4937,
+      "weight": 1.0,
+      "weight_source": "uniform (COMMANDMENT METRIC = unweighted geomean)"
+    },
+    {
+      "name": "tpr4096",
+      "baseline_ms": 3.2135,
+      "optimized_ms": 2.0435,
+      "speedup": 1.5725,
+      "weight": 1.0,
+      "weight_source": "uniform (COMMANDMENT METRIC = unweighted geomean)"
+    }
+  ],
+  "status": "failed",
+  "measurement_valid": true,
+  "patch_file": "",
+  "strategies_tried": [
+    "P2-MEM: 1-D XCD tiling gn in {2,4,8,16} x nx=8, N-fastest. Best is gn=4: L2 misses -1%/-4.6%, time noise. gn=8: +20-26% misses. gn=16 (pure M partition): 2x misses, stage1 -4.9%/-10.9%",
+    "P2-MEM: M-fastest chunks c in {2,4,8,16,32} for gn=2/4/8/16: none better than the legacy order. 16,8,8,1 cut misses 2% at tpr2048 but the forward was 2.4% slower",
+    "P2-MEM: expert-run order (ord 3; 64-block window, vector load of sorted_expert_ids + ballot + ctlz/cttz, N-major walk per expert run). L2 misses -25.5%/-9.5% (gn=16), -19.5%/-6.6% (gn=8), -13%/-1% (gn=4), yet stage1 -1.8..-3.5% and harness forward 0.9863x",
+    "diagnostic ord 4 (same prologue chain, ord-0 mapping, bit-identical): the dependent seid load + ballot + div costs ~2-3.5% of stage1, which cancels the ~+1% from fewer misses",
+    "what-ifs: X always L2-hot = ceiling +3.2%/+5.5% stage1; W always L2-hot = +12.1%/+6.9% (~88 us in both cases, i.e. compulsory 512 MB W13 HBM traffic)",
+    "nx=4 logical XCDs: analysed, not run. It pairs physical XCDs x and x+4 on alternating items, so W panels are fetched by both XCDs of the pair (or the mapping reduces to the gn=2 layout); the gfx950 prior does not transfer",
+    "expert skills: flydsl_rewrite_quantized_moe (only gfx942 kernel-scope match) is a triton->flydsl recipe; nothing to reproduce (as in R1)"
+  ],
+  "notes": "DEAD END, no patch. COMMANDMENT harness, 3 interleaved rounds (medians, ms): canonical 1.1197/2.0412 = 1.5345x; remap gn=4 1.1212/2.0435 = 1.5326x (0.9988 vs canonical, noise); expert-run gn=16 1.1316/2.0763 = 1.5135x (0.9863). Both pass correctness and are bit-identical to canonical. gemm1 PMC (tpr2048/tpr4096): legacy 10.38M/16.50M L2 misses (77/81% hit). X accounts for 4.4M/9.7M of them (X-hot what-if). KEY FINDINGS: (1) The X-replication ceiling is only 3.2%/5.5% of stage1, even with perfect X reuse. (2) Plain XCD tiling (gn>=4) trades X misses for W refetches. The per-reuse W miss probability rises about 2.6% per position of dispatch distance, which fits gn=2..16 at both cases, so the net miss change is -1%/-4.6% at best and time is unchanged. (3) The expert-run order hits the -25% miss target at tpr2048, but its dependent seid-window vector load + ballot + div prologue costs 2-3.5% of stage1, measured with a bit-identical diagnostic. Cutting L2 misses does not cut time here. (4) The W-hot what-if saves the same ~88 us in both cases, which is the compulsory 512 MB W13 HBM read. X misses are cheap (mostly MALL), and remaps only move MALL traffic. The remap code, host bijection proof and dev/PMC tools are in the workspace (default OFF) and in xcd_remap_explore_NOT_A_CANDIDATE.diff. Only untested follow-up: make the remap free on the critical path. For example, the sort (moe_sort_fast, r2_d1) could emit per-CTA (m,n) or per-expert cumulative block counts, read via s_load, combined with the expert-run order. Expected value is at most ~+1% of stage1 (unmeasured). Do not re-fund plain XCD tiling of gemm1."
+}

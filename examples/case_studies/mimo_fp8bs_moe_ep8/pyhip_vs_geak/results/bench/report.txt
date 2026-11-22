@@ -1,0 +1,88 @@
+geak  sort=ck  : FlyDSL 0.1.5.dev504, AMD Instinct MI300X, 2 pass(es); clean: tpr2048 2, tpr4096 1, tpr8192 2
+geak  sort=fast: FlyDSL 0.1.5.dev504, AMD Instinct MI300X, 2 pass(es); clean: tpr2048 1, tpr4096 1, tpr8192 2
+pyhip sort=ck  : FlyDSL 0.4.0, AMD Instinct MI300X, 2 pass(es); clean: tpr2048 2, tpr4096 2, tpr8192 2
+pyhip sort=fast: FlyDSL 0.4.0, AMD Instinct MI300X, 2 pass(es); clean: tpr2048 2, tpr4096 1, tpr8192 1
+
+== correctness vs the GEAK harness reference (rel_l2 <= 2e-2, max_token_rel <= 5e-2) ==
+geak  sort=fast tpr2048 seed100              PASS  rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)
+geak  sort=fast tpr2048 seed200              PASS  rel_l2=2.305e-03 (tol 0.02) max_token_rel=1.213e-02 (tol 0.05)
+geak  sort=fast tpr2048 seed100 stale NaN    PASS  rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)
+geak  sort=fast tpr4096 seed101              PASS  rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)
+geak  sort=fast tpr4096 seed201              PASS  rel_l2=2.314e-03 (tol 0.02) max_token_rel=1.338e-02 (tol 0.05)
+geak  sort=fast tpr4096 seed101 stale NaN    PASS  rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)
+geak  sort=fast tpr8192 seed102              PASS  rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)
+geak  sort=fast tpr8192 seed202              PASS  rel_l2=2.310e-03 (tol 0.02) max_token_rel=1.186e-02 (tol 0.05)
+geak  sort=fast tpr8192 seed102 stale NaN    PASS  rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)
+pyhip sort=fast tpr2048 seed100              PASS  rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)
+pyhip sort=fast tpr2048 seed200              PASS  rel_l2=2.304e-03 (tol 0.02) max_token_rel=1.213e-02 (tol 0.05)
+pyhip sort=fast tpr2048 seed100 stale NaN    PASS  rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)
+pyhip sort=fast tpr4096 seed101              PASS  rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)
+pyhip sort=fast tpr4096 seed201              PASS  rel_l2=2.314e-03 (tol 0.02) max_token_rel=1.338e-02 (tol 0.05)
+pyhip sort=fast tpr4096 seed101 stale NaN    PASS  rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)
+pyhip sort=fast tpr8192 seed102              PASS  rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)
+pyhip sort=fast tpr8192 seed202              PASS  rel_l2=2.310e-03 (tol 0.02) max_token_rel=1.186e-02 (tol 0.05)
+pyhip sort=fast tpr8192 seed102 stale NaN    PASS  rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)
+geak  sort=ck   tpr2048 seed100              PASS  rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)
+geak  sort=ck   tpr2048 seed200              PASS  rel_l2=2.305e-03 (tol 0.02) max_token_rel=1.213e-02 (tol 0.05)
+geak  sort=ck   tpr2048 seed100 stale NaN    PASS  rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)
+geak  sort=ck   tpr4096 seed101              PASS  rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)
+geak  sort=ck   tpr4096 seed201              PASS  rel_l2=2.314e-03 (tol 0.02) max_token_rel=1.338e-02 (tol 0.05)
+geak  sort=ck   tpr4096 seed101 stale NaN    PASS  rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)
+geak  sort=ck   tpr8192 seed102              PASS  rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)
+geak  sort=ck   tpr8192 seed202              PASS  rel_l2=2.310e-03 (tol 0.02) max_token_rel=1.186e-02 (tol 0.05)
+geak  sort=ck   tpr8192 seed102 stale NaN    PASS  rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)
+pyhip sort=ck   tpr2048 seed100              PASS  rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)
+pyhip sort=ck   tpr2048 seed200              PASS  rel_l2=2.304e-03 (tol 0.02) max_token_rel=1.213e-02 (tol 0.05)
+pyhip sort=ck   tpr2048 seed100 stale NaN    PASS  rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)
+pyhip sort=ck   tpr4096 seed101              PASS  rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)
+pyhip sort=ck   tpr4096 seed201              PASS  rel_l2=2.314e-03 (tol 0.02) max_token_rel=1.338e-02 (tol 0.05)
+pyhip sort=ck   tpr4096 seed101 stale NaN    PASS  rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)
+pyhip sort=ck   tpr8192 seed102              PASS  rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)
+pyhip sort=ck   tpr8192 seed202              PASS  rel_l2=2.310e-03 (tol 0.02) max_token_rel=1.186e-02 (tol 0.05)
+pyhip sort=ck   tpr8192 seed102 stale NaN    PASS  rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)
+
+== whole forward, ms/call (harness loop; median and min over the clean rounds x passes) ==
+case     comparison                          GEAK med pyhip med  speedup  GEAK min pyhip min  speedup
+tpr2048  same sort: aiter CK moe_sorting      1.0729    1.1464    1.068x    1.0688    1.1443   1.071x
+tpr2048  same sort: GEAK moe_sort_fast        1.0544    1.1363    1.078x    1.0534    1.1294   1.072x
+tpr2048  as shipped (own sort)                1.0544    1.1464    1.087x    1.0534    1.1443   1.086x
+tpr4096  same sort: aiter CK moe_sorting      1.9624    1.9594    0.999x    1.9563    1.9515   0.998x
+tpr4096  same sort: GEAK moe_sort_fast        1.9296    1.9484    1.010x    1.9260    1.9478   1.011x
+tpr4096  as shipped (own sort)                1.9296    1.9594    1.015x    1.9260    1.9515   1.013x
+tpr8192  same sort: aiter CK moe_sorting      3.7562    3.6447    0.970x    3.7339    3.6300   0.972x
+tpr8192  same sort: GEAK moe_sort_fast        3.7163    3.6130    0.972x    3.6850    3.5962   0.976x
+tpr8192  as shipped (own sort)                3.7163    3.6447    0.981x    3.6850    3.6300   0.985x
+speedup = pyhip / GEAK time (> 1: GEAK faster); * = no clean sample, all (contended) samples used
+
+== GPU kernel time per call, us (torch profiler; mean over calls and clean passes / fastest launch) ==
+case     impl  sort          sort         other         gemm1         gemm2             sum launch
+tpr2048  geak  fast   43.0/  25.6    0.0/   0.0  676.5/ 633.4  387.9/ 355.1  1107.3/ 1014.1    4.0
+tpr2048  pyhip fast   25.6/  16.9   36.3/  24.0  700.0/ 656.3  408.3/ 384.5  1170.3/ 1081.7    8.0
+tpr2048  geak  ck     70.8/  47.2    0.0/   0.0  673.0/ 578.2  390.6/ 337.6  1134.4/  963.0    6.0
+tpr2048  pyhip ck     46.0/  34.0   36.6/  24.7  694.6/ 662.9  403.7/ 388.8  1181.0/ 1110.4   10.0
+tpr4096  geak  fast   55.2/  50.1    0.0/   0.0 1194.3/1040.8  673.9/ 592.6  1923.5/ 1683.5    4.0
+tpr4096  pyhip fast   28.5/  24.8   46.2/  40.7 1181.8/1102.4  694.0/ 661.5  1950.5/ 1829.4    8.0
+tpr4096  geak  ck    113.6/ 105.1    0.0/   0.0 1173.1/1064.0  667.5/ 592.6  1954.2/ 1761.7    6.0
+tpr4096  pyhip ck     76.5/  58.2   48.2/  33.9 1177.0/1111.4  685.9/ 652.5  1987.6/ 1856.0   10.0
+tpr8192  geak  fast   90.9/  85.5    0.0/   0.0 2345.6/2054.1 1289.1/1226.5  3725.5/ 3366.1    4.0
+tpr8192  pyhip fast   30.7/  28.4   71.9/  64.3 2207.4/2131.4 1302.3/1215.0  3612.2/ 3439.1    8.0
+tpr8192  geak  ck    196.8/ 191.6    0.0/   0.0 2273.4/2149.5 1280.7/1179.8  3750.9/ 3520.9    6.0
+tpr8192  pyhip ck    123.4/ 113.4   71.9/  66.1 2165.7/2101.0 1284.6/1195.4  3645.6/ 3475.9   10.0
+
+== output A vs B on the same inputs (valid rows; bitwise = share of identical BF16 elements) ==
+case     A          B             rel_l2   max_abs  bitwise 1-route  bitwise multi
+tpr2048  geak/ck    pyhip/ck    1.19e-03  7.81e-03         99.951%       94.260%
+tpr2048  geak/fast  pyhip/fast  1.18e-03  7.81e-03         99.951%       94.377%
+tpr2048  geak/fast  pyhip/ck    1.19e-03  7.81e-03         99.951%       94.264%
+tpr2048  geak/fast  geak/ck     1.85e-04  7.81e-03        100.000%       99.873%
+tpr2048  pyhip/fast pyhip/ck    3.78e-04  7.81e-03        100.000%       99.456%
+tpr4096  geak/ck    pyhip/ck    1.13e-03  1.56e-02         99.967%       94.728%
+tpr4096  geak/fast  pyhip/fast  1.12e-03  1.56e-02         99.967%       94.897%
+tpr4096  geak/fast  pyhip/ck    1.14e-03  1.56e-02         99.967%       94.726%
+tpr4096  geak/fast  geak/ck     2.84e-05  3.91e-03        100.000%       99.996%
+tpr4096  pyhip/fast pyhip/ck    2.77e-04  7.81e-03        100.000%       99.695%
+tpr8192  geak/ck    pyhip/ck    1.15e-03  7.81e-03         99.965%       94.865%
+tpr8192  geak/fast  pyhip/fast  1.16e-03  7.81e-03         99.965%       94.761%
+tpr8192  geak/fast  pyhip/ck    1.15e-03  7.81e-03         99.965%       94.865%
+tpr8192  geak/fast  geak/ck     0.00e+00  0.00e+00        100.000%      100.000%
+tpr8192  pyhip/fast pyhip/ck    2.40e-04  7.81e-03        100.000%       99.787%

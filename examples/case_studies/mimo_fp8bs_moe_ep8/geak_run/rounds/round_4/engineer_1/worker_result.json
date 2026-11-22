@@ -1,0 +1,38 @@
+{
+  "engineer_id": "r4_d1",
+  "specialty": "algorithm",
+  "task": "Single-local-expert rows: plain bf16 stores in s2 + zero-fill only multi-expert rows (remove fill and atomic-RMW bytes); wrapper graph-capture A/B",
+  "strategy": "Sort flags single-local-expert tokens (sorted-id bit 31 + k_count per-token byte) and k_place zero-fills only non-single rows; s2 epilogue uses one branch-free inline-asm block per row (exec-masked nt plain stores for single rows, exec-masked pk_add_bf16 atomics for multi rows, nothing for padding). Default-ON, MOE_SSTORE=0 restores R3.",
+  "speedup_geomean": 1.6502,
+  "speedup_arithmetic": 1.6508,
+  "speedup_weighted": 1.6495,
+  "per_case": [
+    {
+      "name": "tpr2048",
+      "baseline_ms": 1.6747,
+      "optimized_ms": 1.0433,
+      "speedup": 1.6052,
+      "weight": 0.5,
+      "weight_source": "equal (COMMANDMENT: unweighted geomean)"
+    },
+    {
+      "name": "tpr4096",
+      "baseline_ms": 3.2135,
+      "optimized_ms": 1.8943,
+      "speedup": 1.6964,
+      "weight": 0.5,
+      "weight_source": "equal (COMMANDMENT: unweighted geomean)"
+    }
+  ],
+  "status": "success",
+  "measurement_valid": true,
+  "patch_file": "best_patch.diff",
+  "strategies_tried": [
+    "P0-ALG: single-local-expert plain stores in s2 + multi-only zero fill in k_place + sorted-id bit-31 flag (SHIPPED, +1.33..+1.62% geo same-session)",
+    "P0-ALG: 64-bit 's'-constraint exec masks in inline asm (failed to assemble: LLVM gave VGPRs) -> SCC/s_cmov form",
+    "P2-MEM: plain-store cache policy none/nt/sc1/sc0sc1 -> nt default (fewest s2 EA reads, +0.23..0.35% vs none)",
+    "P3-COMP: in-asm s_cbranch_execz over the dead exec=0 pair (noise; NOT_A_CANDIDATE)",
+    "host_runtime: wrapper-level torch.cuda.CUDAGraph capture per input-pointer key (-0.37% geo; NOT_A_CANDIDATE)"
+  ],
+  "notes": "SHIPPED (default-ON, MOE_SSTORE=0 restores R3 byte-identically): single-local-expert rows get plain bf16 stores in s2; multi rows keep the zero-fill + in-kernel atomics; padding rows do no memory op at all. (1) k_count writes tsingle[t] = (local entries == 1). (2) k_place sets bit 31 of single tokens' sorted ids (low 24 / slot bits unchanged; gemm1's & 0xFFFFFF decode untouched). Its 304 fill blocks zero only non-single rows: contiguous row range per block, wave-ballot compaction into LDS, one wave per row. (3) The s2 epi_mode-3 epilogue (compile knobs sstore, sst_pol in the lru key) emits ONE straight-line inline-asm block per row: save exec; s_cmp_lg kind,1 + s_cmov exec,0 + 2x global_store_dword nt; restore; s_cmp_lg kind,2 + s_cmov exec,0 + 2x global_atomic_pk_add_bf16; restore. kind = readfirstlane(valid ? (bit31 ? 1 : 2) : 0). No CFG, and no row ever gets both a store and an atomic. RESULTS: correctness bit-identical to R3 (rel_l2 2.315e-3/2.307e-3, max_token 1.168e-2/8.024e-3). ext_correct 24/24 PASS. Fallbacks MOE_FAST_SORT=0 / S2_PADSKIP=0 / FBS_PADSKIP=0 / MOE_SSTORE=0 all PASS. Fresh-tree patch -p1 PASS. COMMANDMENT same-session A/B, 3 sessions all wins: GPU2 +1.42% geo (6/6, pre-nt), GPU1 +1.62% (6/6), GPU3 +1.33% (5/5); in-process 9 rounds +1.54% (9/9, null +0.15%). Pooled shipped medians 1.0433/1.8943 ms = 1.6502x (pooled canon 1.6269x). Trace: k_place 37.4->32.5 / 48.6->38.4 us; s2 -1.3% / -1.0%; next gemm1 unchanged / -0.5%; k_count +0.1 us. PMC: k_place EA write 89.0->35.7 / 177.3->70.4 MB. TCC_ATOMIC == TCC_EA0_ATOMIC: every bf16 device atomic is an L2-uncached EA RMW, and s2's EA writes were 100% atomics (64 B requests). EA atomics 2.167M->1.268M / 4.235M->2.496M (-41%), replaced by plain 64 B write-backs; padding zero-atomics (~66K/call) gone. Plain stores sit in L2 as dirty lines, so s2 EA reads rose +9.5/+17 MB with the default policy; nt recovers 6.5/7 MB (nt vs none +0.35% geo, 4/6). ISA: s2 246->242 VGPR, 0 spills, SGPR 74->56. MFMA 1792, ds_read 346, ds_write 114, buffer_load 470 all identical. Full body 1024 MFMA / 664 fma / 172 pk_fma (R3 668/170); the only drift is in the last K tile. gemm1 ISA byte-identical. LESSONS: (a) an inline-asm 's' operand fed by an i64 select was silently given VGPRs and failed to assemble -> pass a readfirstlane'd i32 and build exec inside the asm with s_cmp/s_cmov. (b) Sort-only micro-bench: the fill blocks' flag-load latency costs ~2 us in isolation at tpr2048 but is hidden in the forward. (c) The remaining multi-row fill (35.7/70.4 MB) and EA atomics are the floor under the [M,hidden] accumulate contract. NOT SHIPPED (priced): wrapper CUDA-graph capture MOE_GRAPH -0.37% geo (graph wins 1/6; in-process -0.16%) -> graph_capture_NOT_A_CANDIDATE.diff; in-asm s_cbranch_execz over the dead pair +0.30% = null +0.24% -> sst_execz_skip_NOT_A_CANDIDATE.diff; policies sc1 / sc0sc1 <= nt (knob S2_SST_POL kept). INTEGRATE: s2 edits are confined to module knobs, the _sst_emit helper, the compile signature, the epilogue store loop and host stage2_fp8bs/sstore_supported. No K-loop/rescale edits, so r4_d0 should merge cleanly; re-run ISA gates after the merge."
+}

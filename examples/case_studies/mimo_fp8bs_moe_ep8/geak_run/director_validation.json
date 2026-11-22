@@ -1,0 +1,131 @@
+{
+  "kernel_name": "mimo_fp8bs_moe_ep8",
+  "director_verified_speedup_geomean": 1.6244,
+  "director_verified_speedup_arithmetic": 1.625,
+  "director_verified_speedup_weighted": 1.638,
+  "director_verified_speedup_harmonic_equal_weight": 1.6238,
+  "primary_metric": "geomean (COMMANDMENT: no workload-weighted oracle; no meta.json)",
+  "tech_lead_reported_speedup_geomean": 1.6273,
+  "director_vs_claim_pct": -0.18,
+  "validation_status": "accepted",
+  "timing_basis": "not_applicable",
+  "timing_receipt": null,
+  "cache_basis": "not_applicable",
+  "correctness": "pass",
+  "correctness_detail": {
+    "commandment": "PASS tpr2048 rel_l2=2.315e-03 max_token_rel=1.168e-02; PASS tpr4096 rel_l2=2.307e-03 max_token_rel=8.024e-03",
+    "director_repeat_call_check": "PASS (both input sets per case, after 7 alternating calls; rel_l2 2.305e-3..2.315e-3)"
+  },
+  "per_case": [
+    {
+      "name": "tpr2048",
+      "params": "tokens_per_rank=2048, recv_rows=32768, valid=10841",
+      "baseline_ms": 1.6747,
+      "optimized_ms": 1.05993,
+      "speedup": 1.58,
+      "optimized_runs_ms": [
+        1.0634,
+        1.0613,
+        1.0551
+      ],
+      "same_session_baseline_runs_ms": [
+        1.6701,
+        1.6751,
+        1.6726
+      ],
+      "same_session_baseline_mean_ms": 1.6726,
+      "weight": 1.0,
+      "weight_source": "COMMANDMENT PRIMARY = unweighted geomean (no meta.json / workload spec)",
+      "dims": [
+        [
+          32768,
+          4096
+        ],
+        [
+          32768,
+          32
+        ],
+        [
+          32768,
+          8
+        ],
+        [
+          32768,
+          8
+        ]
+      ],
+      "dtypes": [
+        "float8_e4m3fnuz",
+        "float32",
+        "int32",
+        "float32"
+      ]
+    },
+    {
+      "name": "tpr4096",
+      "params": "tokens_per_rank=4096, recv_rows=32768, valid=21575",
+      "baseline_ms": 3.2135,
+      "optimized_ms": 1.92423,
+      "speedup": 1.67,
+      "optimized_runs_ms": [
+        1.926,
+        1.9219,
+        1.9248
+      ],
+      "same_session_baseline_runs_ms": [
+        3.2297,
+        3.2332,
+        3.2197
+      ],
+      "same_session_baseline_mean_ms": 3.22753,
+      "weight": 1.0,
+      "weight_source": "COMMANDMENT PRIMARY = unweighted geomean (no meta.json / workload spec)",
+      "dims": [
+        [
+          32768,
+          4096
+        ],
+        [
+          32768,
+          32
+        ],
+        [
+          32768,
+          8
+        ],
+        [
+          32768,
+          8
+        ]
+      ],
+      "dtypes": [
+        "float8_e4m3fnuz",
+        "float32",
+        "int32",
+        "float32"
+      ]
+    }
+  ],
+  "same_session_baseline_geomean_speedup": 1.6269,
+  "gpu_used": "GPU0 for all runs (pool 0,1,2,3; see director_validation_logs/gpu_use.jsonl)",
+  "patch_sha256": "e06533da1844d7209e7b8b63b3eda22c0063ce5f8585fa2d9cc8ea310aa5bbe7",
+  "patch_files": {
+    "modified": [
+      "moe_ep.py"
+    ],
+    "added": [
+      "flydsl_moe_fp8bs.py",
+      "flydsl_moe_fp8bs_s1v2.py",
+      "flydsl_moe_fp8bs_s2.py",
+      "moe_sort_fast.py"
+    ]
+  },
+  "freeze_harness_enforced": true,
+  "harness_restored_files": [],
+  "orphan_leases": "none found",
+  "applied_to_original": "false",
+  "validation_workspace": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/validation_workspace",
+  "logs_dir": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/director_validation_logs",
+  "arbitration_note": "ACCEPTED. Director geomean 1.6244x vs TechLead claim 1.6273x (-0.18%, inside the 10% band). Patch e06533da (byte-identical to current_best.diff = canonical 31c4cb1) applied cleanly to a fresh materialize of the TRUE original (1 modified file, moe_ep.py, a declared source_file_path; 4 new files: flydsl_moe_fp8bs.py, flydsl_moe_fp8bs_s2.py, moe_sort_fast.py, flydsl_moe_fp8bs_s1v2.py). GEAK_FREEZE_HARNESS=1 enforcement ran: no non-source tracked file was touched, so nothing was restored; scripts/task_runner.py is byte-identical to the original. COMMANDMENT CORRECTNESS PASS: rel_l2 2.315e-3 / 2.307e-3, max_token_rel 1.168e-2 / 8.024e-3 (tol 2e-2 / 5e-2). An extra Director check (repeated alternating calls with recycled dirty allocator blocks, verifying BOTH perf input sets incl. seed 200+i, which the frozen oracle never checks) also PASSES. A diagnostic confirmed the optimized path is live: FlyDSL gemm1 + s2 loaded, fast sort JIT-built and available, gemm1 pad-skip 4,2,1, and s1v2 not loaded. FULL_BENCHMARK ran 3x on GPU0 (pool lease 0,1,2,3, all idle). tpr2048 was 1.0634 / 1.0613 / 1.0551 ms (mean 1.0599) and tpr4096 was 1.9260 / 1.9219 / 1.9248 ms (mean 1.9242). The 3-run mean matches the frozen baseline's 3-run mean. Per-run geomeans were 1.6210 / 1.6243 / 1.6279. Official speedups use the frozen BASELINE_TIMING (1.6747 / 3.2135): 1.5800x / 1.6700x. The same-session drift check re-measured the pristine original on GPU0 at 1.6726 / 3.2275 ms (-0.13% / +0.44% vs frozen), a same-session geomean of 1.6269x, so the denominator holds. METRIC: no meta.json or workload model exists for this task, so the COMMANDMENT PRIMARY (unweighted geomean) is the arbitration metric. director_verified_speedup_weighted=1.6380 is harness_lib.serving_weighted_speedup(per_case, meta={}). With no regimes/analytic calls, that weights each case by its baseline_ms (= sum(baseline)/sum(optimized)); it is a diagnostic, not the PRIMARY. The TechLead's 'weighted 1.6268' was an equal-weight harmonic mean; the Director's equal-weight harmonic mean is 1.6238. TIMING: FROZEN_ORACLE=false, so timing_basis=not_applicable and timing_receipt=null. The baseline came from this lane's own baseline_timing.json (COMMANDMENT 3-run FULL_BENCHMARK). cache_basis=not_applicable (no receipt; the task_runner does no cache preparation, and both legs were timed under the same warm back-to-back loop over two alternating input sets). This is a lane-baseline ratio, not a receipt-backed device-time claim. No source-binding failures were found (no invalid_measurements.jsonl or GEAK_SOURCE_INVALID in this run). No orphan leases were found. APPLY_TO_ORIGINAL=false, so the original is untouched. NOTES: (1) flydsl_moe_fp8bs_s1v2.py ships in the patch but does not parse (SyntaxError line 159, unclosed paren); it is imported only under MOE_S1_IMPL=v2 inside try/except, so it is inert, and a follow-up may drop it. (2) The TechLead's unbanked R4 stack (round_5/engineer_0/best_patch.diff, claimed 1.6575x) is NOT in this final patch and was not validated here.",
+  "final_patch": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/final_patch.diff"
+}

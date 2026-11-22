@@ -1,0 +1,42 @@
+{
+  "engineer_id": "r2_d1",
+  "specialty": "host_runtime",
+  "task": "Ship the bit-identical fast MoE sort as default and hide the moe_buf zero-fill without touching the GEMM kernels",
+  "strategy": "moe_sort_fast.py (new): 2-kernel HIP align&sort (k_count per-256-row local-expert histograms; k_place = totals/prefix + padded expert bases + wave-ballot deterministic ranks + scatter) replaces CK moe_sorting's 4-kernel ClearWorkspace/P0/P1/P23 chain on the live gemm1 path, bit-identical sorted_ids/sorted_weights/sorted_expert_ids/num_valid_ids. The sort is the single moe_buf zero-fill owner: 304 extra k_place blocks zero rows [0,T) with 16-B stores while the latency-bound placement runs. moe_ep.py: default ON (MOE_FAST_SORT=1, MOE_ZF_SORT_BLOCKS=304), JIT build (torch load_inline into the per-workspace TORCH_EXTENSIONS_DIR) triggered in prepare_weights (untimed), CK fallback when unsupported/build fails, s1v2 path keeps CK; MOE_S1_IMPL default flipped v2->gemm1 (defuses the s1v2 repair trap). s1(...)/stage2_fp8bs(...) call sites untouched; no GEMM kernel file edited.",
+  "speedup_geomean": 1.5431,
+  "speedup_arithmetic": 1.5437,
+  "speedup_weighted": 1.5426,
+  "per_case": [
+    {
+      "name": "tpr2048",
+      "baseline_ms": 1.6747,
+      "optimized_ms": 1.1146,
+      "speedup": 1.5025,
+      "weight": 1.0,
+      "weight_source": "uniform (COMMANDMENT METRIC = unweighted geomean)"
+    },
+    {
+      "name": "tpr4096",
+      "baseline_ms": 3.2135,
+      "optimized_ms": 2.0276,
+      "speedup": 1.5849,
+      "weight": 1.0,
+      "weight_source": "uniform (COMMANDMENT METRIC = unweighted geomean)"
+    }
+  ],
+  "status": "success",
+  "measurement_valid": true,
+  "patch_file": "best_patch.diff",
+  "strategies_tried": [
+    "P0-ALG: fast 2-kernel align&sort (k_count+k_place) replacing CK 4-kernel chain, bit-identical (SHIPPED)",
+    "P2-MEM: sort-owned moe_buf fill via 304 extra k_place blocks (SHIPPED; best correct fill placement at both cases)",
+    "P4-LAUNCH: side-stream fill forked before the sort / after the sort, 16-1216 blocks, normal and high priority: -0.3% to -6% vs sort-owned (bimodal slowdowns), dropped",
+    "P4-LAUNCH: serial fill right before stage2 (pre_s2): ties sort-owned (zeros MALL-hot for stage2 atomics offset the lost overlap), dropped",
+    "P4-LAUNCH: hipExtAnyOrderLaunch fill after gemm1 to use gemm1's tail: ignored on gfx942 (k_zero starts exactly at gemm1 end), dropped",
+    "P0-ALG: single-kernel sort with grid barrier (+fill blocks): 17.9/21.7 us without fill, 34/50 us with fill (agent-scope release = L2 writeback of the fill's dirty lines), dropped",
+    "P2-MEM: fill split across k_count+k_place (zsplit 128-384/1024, 96-608 blocks): no gain, dropped",
+    "P5-TUNE: fill block count 32-1216: micro-bench optimum 176 (= 304 CUs - 128 sort blocks, no CU sharing: sort+fill 20.5/33.1 vs 23.9/36.5 us) but forward-level A/B neutral (+0.07%/-0.05%), kept 304",
+    "P2-MEM: non-temporal (streaming) zero stores: +0.3%/+0.2% in one run, did not replicate (-0.26%/+0.08%), dropped"
+  ],
+  "notes": "Final (lean patch) same-session harness A/B, 5 interleaved rounds: canonical 1.1198/2.0446 ms (1.5331x) -> 1.1146/2.0276 ms (1.5431x); paired +0.48%/+0.79%, 5/5 wins on both cases. Checkpoint-1 A/B (4 rounds, GPU0, functionally identical code): 1.5335x -> 1.5471x (+0.87%/+0.90%, 4/4). In-process paired A/B (same process, toggling CK vs fast, 40 rounds): +0.55%/+0.85% (33/40, 37/40). tpr2048 gains less than tpr4096 (0.5-1.0% across runs vs 0.8-1.0%), contrary to the direction's expectation, because CK's P23 fill costs more at large T. GPU micro-bench (back-to-back, no profiler): CK fill 39.0/67.6 us -> fast+fill 23.8/36.5 us; fast sort alone 15.7/16.5 us; fill alone 16.4/29.3 us (~6.3 TB/s). KEY FINDING: at forward level the fill costs ~11-12/26-29 us vs no fill (diagnostic, incorrect) wherever it is placed (sort-owned == serial-before-stage2; side stream worse): the cost tracks bytes written (89/177 MB), consistent with HBM-write energy under the 750W power cap rather than critical-path time, so further fill-placement work inside these constraints is exhausted; only ~50% of micro-bench sort savings show up in the forward. Remaining no-fill upper bound vs shipped: +1.0%/+1.4% - reachable only by changing stage2's accumulate contract (first contribution stores instead of atomics) or gemm1-K-loop fill (both outside this lane). Proofs: bit-identity vs CK for 5 seeds x 2 cases + 10 degenerate inputs (mask variants, T=1..4000, tokens with no local expert), moe_buf rows [0,T) exactly zero on a NaN-poisoned pool block, rows >= T untouched; forward dispatch count fast 2 / CK 0; COMMANDMENT profile trace: k_count x12, k_place x12, moe_fp8bs_gemm1 x12, moe_s2_fp8bs x12, zero CK MoeSorting/ClearWorkspace/MultiPhase kernels. Patch applied with patch -p1 to a fresh materialized canonical tree (no .torch_ext): extension JIT-builds from scratch inside prepare_weights (~25 s, untimed) and correctness PASSes. NOTE for verify: git apply run inside the GEAK repo subtree silently skips the paths; use patch -p1 or a standalone git repo."
+}

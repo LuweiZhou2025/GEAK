@@ -1,0 +1,2 @@
+source: /sgl-workspace/aiter/aiter/fused_moe.py
+aiter commit: a6bb499375849eec45d68c5ccaebc8865fd422c0

@@ -1,0 +1,19 @@
+{
+  "kernel_name": "mimo_fp8bs_moe_ep8",
+  "director_verified_speedup_geomean": 1.53877,
+  "director_verified_speedup_arithmetic": 1.53928,
+  "director_verified_speedup_weighted": 1.53877,
+  "tech_lead_reported_speedup_geomean": 1.5397,
+  "validation_status": "accepted",
+  "timing_basis": "not_applicable",
+  "timing_receipt": null,
+  "cache_basis": "not_applicable",
+  "correctness": "pass",
+  "per_case": [
+    {"name": "tpr2048", "baseline_ms": 1.6807, "optimized_ms": 1.1207, "speedup": 1.49969},
+    {"name": "tpr4096", "baseline_ms": 3.2239, "optimized_ms": 2.0419, "speedup": 1.57887}
+  ],
+  "applied_to_original": "false",
+  "arbitration_note": "Independently reproduced from the TRUE aiter fused_moe baseline. Fresh validation_workspace materialized from KERNEL_PATH_ORIG, final_patch.diff applied cleanly, correctness PASS (tpr2048 rel_l2=2.315e-03/max_token_rel=1.168e-02; tpr4096 rel_l2=2.307e-03/max_token_rel=8.024e-03, well under tol 2e-2/5e-2). FULL_BENCHMARK run 3x, per-case median: tpr2048=1.1207ms (speedup 1.4997), tpr4096=2.0419ms (speedup 1.5789); unweighted geomean=1.5388. This is within 0.06% of the TechLead's 1.5397 claim -> accepted. COMMANDMENT declares this task NOT workload-weighted, so the PRIMARY metric is the unweighted geomean (weighted field mirrors it). FROZEN_ORACLE=false (pass-through optimize lane, no oracle_freezer) -> timing_basis=not_applicable; baseline came from this lane's baseline_timing.json (tpr2048=1.6807ms, tpr4096=3.2239ms), not a receipt-backed device-time claim. APPLY_TO_ORIGINAL=false -> original left untouched. No orphan GPU leases found.",
+  "final_patch": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_033008_203638_23468/mimo_fp8bs_moe_ep8/final_patch.diff"
+}

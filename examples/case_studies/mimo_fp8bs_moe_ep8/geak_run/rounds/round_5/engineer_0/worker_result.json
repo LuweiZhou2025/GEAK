@@ -1,0 +1,39 @@
+{
+  "engineer_id": "r5_d0",
+  "specialty": "memory",
+  "task": "R5: bank the R4 stack (r4 merge + r4_d2) and add a table-driven expert-run gemm1 CTA order (k_place emits a per-CTA table; gemm1 reads it with one s_load)",
+  "strategy": "SHIPPED: the R4 stack alone (best_patch.diff == tech_lead_r5/r4_stack_vs_31c4cb1.diff, sha256 98b5a13b..., 4 files, relative to 31c4cb1; all R3+R4 knobs default ON incl. r4_d2 FBS_PS_PRO=1/FBS_PS_SLEEP=8,12/FBS_PADZERO=1). NOT SHIPPED (failed the ship rule): FBS_ORD table-driven gemm1 CTA order, saved as order_NOT_A_CANDIDATE.diff.",
+  "speedup_geomean": 1.6614,
+  "speedup_arithmetic": 1.662,
+  "speedup_weighted": 1.6609,
+  "per_case": [
+    {
+      "name": "tpr2048",
+      "baseline_ms": 1.6747,
+      "optimized_ms": 1.0351,
+      "speedup": 1.6179,
+      "weight": 1.0
+    },
+    {
+      "name": "tpr4096",
+      "baseline_ms": 3.2135,
+      "optimized_ms": 1.8835,
+      "speedup": 1.7061,
+      "weight": 1.0
+    }
+  ],
+  "status": "success",
+  "measurement_valid": true,
+  "patch_file": "best_patch.diff",
+  "strategies_tried": [
+    "bank R4 stack (r4 integrate + r4_d2): COMMANDMENT PASS rel_l2 2.315e-3/2.307e-3, ext_correct 24/24 PASS; +1.85% geo vs 31c4cb1 same-session (12/12 paired wins, GPU0+GPU1)",
+    "r4_d2 knobs inside the stack: +0.36% geo (stack beats r4merge 10/12) -> kept ON",
+    "FBS_ORD=1 expert-run XCD order via k_place table + one gemm1 s_load (ungated): -0.15% geo (ord0 wins 13/16; tpr2048 +0.0%, tpr4096 -0.41%)",
+    "FBS_ORD=2 identity table (prices mechanism), ungated: -0.33% geo (10/11) -> empty CTAs s_loading cold never-written table lines",
+    "FBS_ORD_GATE=1 (CTAs past the work region read entry 0): identity cost cut to -0.06% (4/11); expert-run order g1: +0.04% geo (8/14; tpr2048 +0.27%, tpr4096 -0.14%)",
+    "FBS_ORD_C=8 run chunk cap (bound X working set): -0.83% geo (0/12; tpr4096 -1.2%) -> W panel re-streaming dominates",
+    "balanced XCD partition (q=nmb/8 blocks per XCD + identity tail, exactly 2*nmb CTAs per XCD): -0.30% geo (5/24; tpr4096 -0.44%)",
+    "PMC screen: order cuts gemm1 L2 misses 11.62M->9.45M (-18.7%) at tpr2048 but 17.16M->16.75M (-2.4%) at tpr4096"
+  ],
+  "notes": "DELIVERABLE = the R4 stack, measured +1.85% geo over 31c4cb1 same-session (S1 GPU0 + S2 GPU1, 12 interleaved COMMANDMENT rounds, canon wins 0/12; tpr2048 +1.96%, tpr4096 +1.97%). Pooled same-session stack medians 1.0351/1.8835 ms = 1.6614x (canon 1.0532/1.9181 = 1.6322x in the same sessions). ABSOLUTE stack geomean per GPU (all stack-equivalent arms, FBS_ORD=0 gemm1 ISA byte-identical): GPU0 1.6571x (n=21; canon 1.6294x same session), GPU1 1.6663x (n=17), GPU2 1.6568x (n=19), GPU3 1.6222x (n=12). WARNING for the gate: on GPU0/GPU2 the stack alone reads ~1.657x, about 0.15-0.2% UNDER the 1.6598 commit gate; only GPU1 clears it. The increment that was supposed to carry it did not materialize. Stack checks: git apply --check OK on a fresh canonical copy (re-checked last), COMMANDMENT PASS rel_l2 2.315e-3/2.307e-3, ext_correct 24/24 PASS, ISA gemm1 246 VGPR 0 spill, s2 234 VGPR 0 spill 0 v_pk_fma_f32. r4_d2 knobs inside the stack +0.36% (10/12) -> default ON confirmed. THE CTA-ORDER INCREMENT (FBS_ORD, order_NOT_A_CANDIDATE.diff, 4 files, applies on 31c4cb1): k_place writes one packed i32 per linear gemm1 CTA (m | n<<13 | cnt<<17 | expert<<24) into a separate table passed through gemm1's arg_blk_cnt slot; gemm1 s_loads its entry next to num_valid (no loop/vector load/ballot), takes M block, N tile, pad-skip count and expert id from it. Correct and bit-exact: table == host mirror, bijection, XCD-affine, a2 and a2-scale bit-identical ORD0 vs ORD1 vs ORD2 on both cases; FBS_ORD=0 gemm1 ISA byte-identical to the stack; ORD=1 gemm1 242 VGPR, 0 spill. Measured (paired, interleaved, frozen snapshots, 2-4 GPUs): (a) ungated: ord1 -0.15% (13/16 vs), identity ord2 -0.33% -> the mechanism itself cost ~0.3% because the ~65K empty CTAs s_loaded cold, never-written table lines; (b) FBS_ORD_GATE=1 (out-of-region CTAs read entry 0) brought identity to -0.06% and the expert-run order to +0.04% (8/14; tpr2048 +0.27%, tpr4096 -0.14%); (c) run chunk cap 8 -0.83% (0/12): W re-streaming per chunk costs far more than the X reuse it buys; (d) exactly balanced XCD partition -0.30% (5/24, tpr4096 -0.44%), so the tpr4096 loss is not XCD imbalance. PMC: the order removes 18.7% of gemm1 L2 misses at tpr2048 (11.62M->9.45M, hit 74.2->79.0%) but only 2.4% at tpr4096 (runs ~16 blocks -> ~4 MB X per XCD, i.e. the whole L2). The removed misses are cross-XCD X re-fetches that MALL already serves, worth only ~+0.27% of the forward at tpr2048: this is a counter-example to the 'bytes convert 1:1' rule. CLOSE the gemm1 CTA-order lane (expert-run, chunked, balanced, identity-table variants all <= +0.04%). Process: all GPU jobs were stopped at 19:49:52Z (minute 36); best_patch.diff was on disk from minute 6."
+}

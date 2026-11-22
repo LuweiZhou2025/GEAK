@@ -1,0 +1,161 @@
+{
+ "impl": "geak",
+ "sort": "fast",
+ "flydsl": "0.1.5.dev504",
+ "device": "AMD Instinct MI300X",
+ "cases": {
+  "tpr2048": {
+   "rows": 32768,
+   "valid": 10841,
+   "checks": {
+    "seed100": [
+     true,
+     "rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)"
+    ],
+    "seed200": [
+     true,
+     "rel_l2=2.305e-03 (tol 0.02) max_token_rel=1.213e-02 (tol 0.05)"
+    ],
+    "seed100 stale NaN": [
+     true,
+     "rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)"
+    ]
+   },
+   "ms": [
+    1.0543791961669922,
+    1.0534093475341797,
+    1.0558132934570312,
+    1.0568267822265625,
+    1.054375228881836
+   ],
+   "kernels": {
+    "void k_count<8>(int const*, int const*, int const*, int, int*)": [
+     6.7745,
+     1.0,
+     5.452
+    ],
+    "void k_place<8>(int const*, float const*, int const*, int const*, int, int, int const*, int*, float*, int*, int*, HIP_vector_type<int, 4u>*, int, int, int*)": [
+     36.17550000000001,
+     1.0,
+     20.125
+    ],
+    "moe_fp8bs_gemm1_0": [
+     676.4931666666668,
+     1.0,
+     633.416
+    ],
+    "moe_s2_fp8bs_0": [
+     387.9048666666667,
+     1.0,
+     355.136
+    ]
+   },
+   "gpu_busy": [
+    0,
+    6
+   ]
+  },
+  "tpr4096": {
+   "rows": 32768,
+   "valid": 21575,
+   "checks": {
+    "seed101": [
+     true,
+     "rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)"
+    ],
+    "seed201": [
+     true,
+     "rel_l2=2.314e-03 (tol 0.02) max_token_rel=1.338e-02 (tol 0.05)"
+    ],
+    "seed101 stale NaN": [
+     true,
+     "rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)"
+    ]
+   },
+   "ms": [
+    1.9259776306152343,
+    1.929622344970703,
+    1.936065673828125,
+    1.9289096069335938,
+    1.9364361572265625
+   ],
+   "kernels": {
+    "void k_count<8>(int const*, int const*, int const*, int, int*)": [
+     6.674233333333333,
+     1.0,
+     5.932
+    ],
+    "void k_place<8>(int const*, float const*, int const*, int const*, int, int, int const*, int*, float*, int*, int*, HIP_vector_type<int, 4u>*, int, int, int*)": [
+     48.52146666666667,
+     1.0,
+     44.141
+    ],
+    "moe_fp8bs_gemm1_0": [
+     1194.3389999999997,
+     1.0,
+     1040.753
+    ],
+    "moe_s2_fp8bs_0": [
+     673.9239666666666,
+     1.0,
+     592.642
+    ]
+   },
+   "gpu_busy": [
+    0,
+    6
+   ]
+  },
+  "tpr8192": {
+   "rows": 65536,
+   "valid": 43376,
+   "checks": {
+    "seed102": [
+     true,
+     "rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)"
+    ],
+    "seed202": [
+     true,
+     "rel_l2=2.310e-03 (tol 0.02) max_token_rel=1.186e-02 (tol 0.05)"
+    ],
+    "seed102 stale NaN": [
+     true,
+     "rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)"
+    ]
+   },
+   "ms": [
+    3.6849951171875,
+    3.701448974609375,
+    3.709941711425781,
+    3.7100680541992186,
+    3.708436279296875
+   ],
+   "kernels": {
+    "void k_count<8>(int const*, int const*, int const*, int, int*)": [
+     6.762600000000001,
+     1.0,
+     5.812
+    ],
+    "void k_place<8>(int const*, float const*, int const*, int const*, int, int, int const*, int*, float*, int*, int*, HIP_vector_type<int, 4u>*, int, int, int*)": [
+     83.6888,
+     1.0,
+     79.863
+    ],
+    "moe_fp8bs_gemm1_0": [
+     2329.2736333333337,
+     1.0,
+     2054.114
+    ],
+    "moe_s2_fp8bs_0": [
+     1284.4373333333335,
+     1.0,
+     1246.867
+    ]
+   },
+   "gpu_busy": [
+    0,
+    20
+   ]
+  }
+ }
+}

@@ -1,0 +1,60 @@
+{
+  "run_id": "team_mimo_fp8bs_moe_ep8_20261119_033008_203638_23468",
+  "date": "2026-11-19",
+  "kernel_names": [
+    "mimo_fp8bs_moe_ep8"
+  ],
+  "validation_status": "accepted",
+  "box_quiet": true,
+  "held_out": false,
+  "citations": [],
+  "cards": [
+    {
+      "name": "swap-the-asm-fmoe-path-for-a-flydsl-native-fp8-two-stage-moe",
+      "description": "Replace the aiter asm fmoe path with a FlyDSL native-fp8 block-scale 2-stage MoE: occupancy 1->2 waves/SIMD, MFMA ~33->60%, ~1.54x on gfx942",
+      "keywords": [
+        "moe",
+        "grouped-gemm",
+        "fp8-blockscale",
+        "occupancy",
+        "mfma",
+        "flydsl",
+        "gfx942"
+      ],
+      "kernels": [
+        "moe_fp8bs_gemm1_0",
+        "moe_s2_fp8bs_0"
+      ],
+      "platforms": [
+        "gfx942"
+      ],
+      "kernel_class": "e2e",
+      "regime": "mixed",
+      "key": "fp8 block-scale fused-MoE EP8 forward, compute/issue-bound, gfx942/MI300X, FlyDSL native-fp8 replacing an aiter asm path",
+      "lifecycle": "active",
+      "layer": "learned",
+      "levers": [
+        "algo.native-fp8-rewrite",
+        "compute.occupancy"
+      ],
+      "cost": "L3",
+      "type": "lever",
+      "confidence": "★★",
+      "attempts": 1,
+      "confirms_cited": 0,
+      "confirms_blind": 0,
+      "losses": 0,
+      "verified_on": "2026-11-19",
+      "last_seen": "2026-11-19",
+      "effect": "~1.54x final director-verified vs the frozen aiter baseline (per-case: tpr2048 ~1.50x, tpr4096 ~1.58x); the round-1 algorithm replacement carried essentially all of it (~1.49x), rounds 2-3 added only sub-1% run-to-run noise.",
+      "roofline": "compute/issue-bound before and after; occupancy 1->2 waves/SIMD, MFMA ~33%->~60% of achievable, HBM <20% of peak so not memory-bound; the power-capped throttled clock caps the fp8 ceiling, so it reached ~1.54x against a ~1.8x roofline prediction.",
+      "title": "FlyDSL native-fp8 two-stage MoE replaces the aiter asm fmoe path on gfx942",
+      "lever": "Replace the vendor aiter asm fmoe path with a FlyDSL native-fp8 block-scale two-stage MoE (stage1 gate/up GEMM + SiLU/requant, stage2 down GEMM + bf16 accumulate, per-case dispatch); the win is occupancy -- the asm path runs 1 wave/SIMD while the FlyDSL 2-stage reaches 2 (112 arch + 128 accum = 240 VGPR on the 512-wide gfx942 unified file), lifting MFMA util from ~1/3 to ~3/5 of achievable.",
+      "apply": "Route the module's forward-fbs dispatch to the FlyDSL stage kernels (stage1 gate/up+SiLU, stage2 down+accumulate) instead of the asm fused-moe/fmoe entry; stage1 fits in 32768 bytes of LDS with no scratch at tile_m=64.",
+      "verify": "Confirm the FlyDSL kernel actually ENGAGED from the live kernel trace / grid shape, not from the headline wall-clock; confirm both token cases beat the frozen-baseline isolated A/B and pass oracle parity (rel_l2 ~2.3e-3, max_token_rel well under tolerance).",
+      "pitfall": "A committed XCD-swizzle 'winner' timed at the current best but the swizzle never ran -> its stage1 module had an unclosed-paren SyntaxError and the import is wrapped in try/except so it fails SILENTLY (module -> None -> fallback stage1) -> confirm engagement by the live grid (swizzled (G,1,1) vs the 2-D fallback grid), never by the headline number.\nA competing stage1 with a different tiling claimed ~1.51x but measured ~1.00x standalone -> that 1.51x was a non-isolated measurement -> isolate each direction against the frozen baseline, and note two different stage1 tilings cannot merge.\nA real ~1.05x host-tax cut added 0 once the FlyDSL path won -> the forward-fbs path never calls the asm fused-moe, so a win on the replaced path cannot compound -> re-check whether a lever lives on the path the winner bypasses before funding it again.",
+      "caution": "Later-round micro-levers (XCD swizzle, stage2 vmem-load front-loading, epilogue LDS-row-stride pad) were all sub-1% / run-to-run noise over the round-1 level -- also verify any such knob with a paired A/B before shipping, and expect the power-capped throttled clock to cap the fp8 compute ceiling (~1.54x reached vs ~1.8x predicted).",
+      "source": "run team_mimo_fp8bs_moe_ep8_20261119_033008_203638_23468, 2026-11-19, gfx942/MI300X, 3-round campaign (8 directions), director-validated geomean 1.539x, correctness pass (rel_l2 ~2.3e-3)"
+    }
+  ]
+}

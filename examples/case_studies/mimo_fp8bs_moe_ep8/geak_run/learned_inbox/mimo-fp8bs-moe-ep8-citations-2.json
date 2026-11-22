@@ -1,0 +1,61 @@
+{
+  "run_id": "mimo_fp8bs_moe_ep8-citations",
+  "date": "2026-11-19",
+  "kernel_names": [
+    "mimo_fp8bs_moe_ep8"
+  ],
+  "validation_status": "accepted",
+  "box_quiet": true,
+  "held_out": false,
+  "cards": [],
+  "citations": [
+    {
+      "card": "32x32-mfma-remap-carries-a-block-scale-moe-grouped-gemm-epil-moe-grouped-gemm-gfx950-both.md",
+      "round": 1,
+      "direction": "r1_d2",
+      "specialty": "compute",
+      "cited_then_verified": 1.0035,
+      "became_winner": false
+    },
+    {
+      "card": "block-scale-moe-grouped-gemm-fund-the-scale-metadata-path-no-moe-grouped-gemm-gfx950-both.md",
+      "round": 1,
+      "direction": "r1_d2",
+      "specialty": "compute",
+      "cited_then_verified": 1.0035,
+      "became_winner": false
+    },
+    {
+      "card": "invert-the-xcd-round-robin-with-a-chunk-interleaved-workgrou-moe-grouped-gemm-gfx950-mixed.md",
+      "round": 1,
+      "direction": "r1_d2",
+      "specialty": "compute",
+      "cited_then_verified": 1.0035,
+      "became_winner": false
+    },
+    {
+      "card": "invert-the-xcd-round-robin-with-a-chunk-interleaved-workgrou-moe-grouped-gemm-gfx950-mixed.md",
+      "round": 2,
+      "direction": "r2_d0",
+      "specialty": "memory",
+      "cited_then_verified": 1.5397,
+      "became_winner": true
+    },
+    {
+      "card": "nameplate-resources-are-already-solved-on-preshuffled-b-bloc-moe-grouped-gemm-gfx950-mixed.md",
+      "round": 3,
+      "direction": "r3_d2",
+      "specialty": "compute",
+      "cited_then_verified": 1.5407,
+      "became_winner": false
+    },
+    {
+      "card": "pad-the-epilogue-lds-row-stride-off-the-32-bank-period-moe-grouped-gemm-gfx950-mixed.md",
+      "round": 3,
+      "direction": "r3_d2",
+      "specialty": "compute",
+      "cited_then_verified": 1.5407,
+      "became_winner": false
+    }
+  ]
+}

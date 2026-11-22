@@ -1,0 +1,42 @@
+{
+  "engineer_id": "r3_d0",
+  "specialty": "compute",
+  "task": "gemm1 issue/dependency recipe port: VALU-slotted sched_group_barrier, fully packed rescale, maxnumf epilogue, setprio re-A/B",
+  "strategy": "Scalar (unpacked) K-loop rescale: all 2048 rescale lanes/wave as v_fmac_f32 (FBS_RS=1, 0 v_pk_fma_f32) because gfx942 V_PK_*_F32 cannot execute while any wave's MFMA is in flight; rocdl.waves_per_eu=2 (FBS_WPE=2, VGPR 240->230); whole-K-loop s_setprio(1) (FBS_G1_PRIO=1); maxnumf row-max epilogue (FBS_EPI_MAXNUM=1, v_max3, -127 VALU/wave). Bit-identical a2/a2s.",
+  "speedup_geomean": 1.6115,
+  "speedup_arithmetic": 1.6122,
+  "speedup_weighted": 1.6108,
+  "per_case": [
+    {
+      "name": "tpr2048",
+      "baseline_ms": 1.6747,
+      "optimized_ms": 1.0698,
+      "speedup": 1.5654,
+      "weight": 1.0,
+      "weight_source": "unweighted geomean (COMMANDMENT: no workload spec)"
+    },
+    {
+      "name": "tpr4096",
+      "baseline_ms": 3.2135,
+      "optimized_ms": 1.9371,
+      "speedup": 1.6589,
+      "weight": 1.0,
+      "weight_source": "unweighted geomean (COMMANDMENT: no workload spec)"
+    }
+  ],
+  "status": "success",
+  "measurement_valid": true,
+  "patch_file": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/round_3/engineer_0/best_patch.diff",
+  "strategies_tried": [
+    "P3-COMP: scalar v_fmac rescale instead of v_pk_fma_f32 (FBS_RS=1) - WIN gemm1 -3.5%/-3.8%, fwd +2.30%",
+    "P4-LAUNCH: rocdl.waves_per_eu=2 attribute (FBS_WPE=2) - kept (VGPR 230, +0.6%/0% isolated)",
+    "P3-COMP: VALU-slotted per-MFMA-slot sched_group_barrier (FBS_SCHED=5, s2 recipe) - nops 1325->425 cyc but noise",
+    "P3-COMP: fully packed rescale (direction step 3) - inverted: packing IS the regression on gfx942",
+    "P3-COMP: maxnumf row-max epilogue (FBS_EPI_MAXNUM=1) - WIN +0.4%/+0.45% isolated",
+    "P4-LAUNCH: loop-level s_setprio(1) (FBS_G1_PRIO=1) - WIN with maxnum +1.2%/+1.1% isolated; per-tile placement -5.4%/-4.8%",
+    "P5-TUNE: BPF=1, DEFER=2, SCHED_G1=4/16, slot-sched combos - all within null-arm noise",
+    "P3-COMP: MF32 32x32x16 with scalar rescale - dead end -3.9%/-5.3%",
+    "P1-REUSE: prologue X/B loads before scale-table LDS writes (FBS_PRO=1) - noise"
+  ],
+  "notes": "RESULT: lean best_patch.diff (flydsl_moe_fp8bs.py stage1 only; stage2 byte-identical; applies with patch -p1 to fresh f3f9493) = FBS_RS=1 + FBS_WPE=2 + FBS_G1_PRIO=1 + FBS_EPI_MAXNUM=1, all default-ON. Final 5 interleaved COMMANDMENT rounds on GPU2: same-session canonical 1.5679x (1.0993/1.9913 ms) vs candidate 1.6115x (1.0698/1.9371 ms) = +2.78% geomean, paired +3.25%/+2.67%, 5/5 wins both cases (full-knob build with identical K-loop ISA: 6 rounds 1.5672x->1.6127x, 6/6). Correctness PASS, rel_l2 2.315e-3/2.307e-3 unchanged; a2/a2s bit-identical to canonical. ISA: 0 v_pk_fma_f32 (was 753), 2048 v_fma/v_fmac (was 542), VGPR 230 (was 240), LDS 32KB, scratch 0, 2 waves/SIMD. rocprofv3 kernel trace by name moe_fp8bs_gemm1_0 (same process, interleaved): 681.8->636.7us (-6.6%) / 1273.5->1188.8us (-6.7%). KEY FINDING (direction step 3 was inverted): the 542 scalar v_fma_f32 were LLVM SIPreEmitPeephole::performF32Unpacking unpacking V_PK_*_F32 in MFMA shadows, not a broadcast-operand packing failure. r3_d0 micro-bench (tools/coissue): gfx942 v_mfma_f32_16x16x32_fp8 16.6 cyc; +1 v_pk_fma_f32 30.1 cyc; +2 v_fma_f32 17.1 cyc (free); +2 v_pk_mul_f32 34.1; a pk-only wave co-resident with an MFMA-streaming wave makes ~0 progress (packed FP32 waits for the SIMD's matrix pipe to drain, any wave); trans (exp/rcp) and cvt_pk_fp8 co-run but slow the MFMA wave 16.6->21.7/21.2. Rule: never leave V_PK_*_F32 near MFMAs on gfx942. POWER CAP: PMC (serialized dispatches) shows gemm1 cycles -10.7%/-11.8% and MFMA-busy 59.4->66.6% / 65.4->74.1%, but sclk drops 1.283->1.187 / 1.198->1.145 GHz; in the back-to-back forward the lower clock carries into the UNCHANGED s2 (bit-identical inputs), which runs +3.6%/+4.2% slower. So ~11% fewer cycles -> ~6.6% gemm1 time -> ~2.7-3.2% forward. Counter cuts only partly convert. STEP VERDICTS (gemm1-isolated in-process paired A/B, 7-9 rounds, null arm ~+-0.5%): step1 FBS_RS=1(+WPE2) -3.5%/-3.8% gemm1, COMMANDMENT +2.30% 5/5; step2 VALU-slotted sched_group_barrier (FBS_SCHED=5, s2 recipe, VGPR 250) K-loop nop cycles 1325->425 but +0.1..0.9% / -1.2..+0.5% = noise, not shipped; step4 maxnumf row-max +0.38%/+0.45% (v_cmp_o 56->0, v_cndmask 60->4, -127 VALU/wave); step5 loop-level setprio(1) +0.2%/+0.5%, steps 4+5 together +1.21%/+1.06% (6/7, 7/7), COMMANDMENT steps1+4+5 +2.56% 5/5 on GPU3; the OLD per-tile setprio placement (FBS_G1_PRIO=2) is -5.4%/-4.8% because s_setprio is a scheduling boundary that cuts each tile's sched_group_barrier pattern off its MFMAs (explains the pre-warm-start setprio regression); step6 BPF=1, DEFER=2, SCHED_G1=4/16, slot+BPF1 combos all within null noise (in-process forward BPF=1 +0.2/+0.2 vs null +0.5/+0.05); MF32 32x32x16 with scalar rescale -3.9%/-5.3% (closed again); FBS_PRO prologue (X/B loads before scale-table LDS writes, 3->2 dependent round trips) noise. WHAT-IFS (step-1 build, diagnostic): DBG_BK0 (L2-hot B) +14.9%/+10.0% but PMC MFMA-busy unchanged and sclk 1.165 vs 1.05 GHz -> W/EA traffic costs clock (energy), not latency (BPF=1 is neutral); DBG_NOSCALE +6.0%/+6.3% (2048 rescale FMA/wave floor); DBG_NOEPI +5.3%/+3.8%; DBG_NOBAR +1.7%/+0.8%. FOR TECHLEAD: (1) s2 (r3_d1's file, untouched) still has 170 v_pk_fma_f32 in its K loop + 8 in epilogue -> same _fma_sc scalar-FMA swap should cut s2 cycles similarly (~1% forward net of power). (2) Only energy cuts now convert to time: W/EA bytes, padding MFMAs (r3_d1's skip lands cleanly: K-loop structure/FBS_SCHED=3 unchanged), epilogue 4-5%. ARTIFACTS: /sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/round_3/engineer_0/best_patch.diff (lean), /sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/round_3/engineer_0/slot_sched_prologue_knobs_NOT_A_CANDIDATE.diff (dead-end knob paths FBS_SCHED=5/FBS_PRO), /sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/round_3/engineer_0/checkpoints.log (per-step verdicts), tools/ (census.py, isa.sh, ab_g1.py isolated|forward|fwdprof|prof, harness_ab.sh, summ.py, pmc.sh, pmc_parse.py, fwdprof_parse.py, coissue/), isa/, logs/, pmc/, trace/. No report.md (subagent harness forbids report files; this note is the report)."
+}

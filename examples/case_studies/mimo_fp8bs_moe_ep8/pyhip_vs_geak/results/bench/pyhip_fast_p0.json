@@ -1,0 +1,221 @@
+{
+ "impl": "pyhip",
+ "sort": "fast",
+ "flydsl": "0.4.0",
+ "device": "AMD Instinct MI300X",
+ "cases": {
+  "tpr2048": {
+   "rows": 32768,
+   "valid": 10841,
+   "checks": {
+    "seed100": [
+     true,
+     "rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)"
+    ],
+    "seed200": [
+     true,
+     "rel_l2=2.304e-03 (tol 0.02) max_token_rel=1.213e-02 (tol 0.05)"
+    ],
+    "seed100 stale NaN": [
+     true,
+     "rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)"
+    ]
+   },
+   "ms": [
+    1.13589599609375,
+    1.1426651000976562,
+    1.1456520080566406,
+    1.138453140258789,
+    1.1482101440429688
+   ],
+   "kernels": {
+    "void at::native::elementwise_kernel_manual_unroll<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1} const&)::{lambda(int, bool)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1} const&)::{lambda(int, bool)#1})": [
+     12.493166666666665,
+     1.0,
+     10.263
+    ],
+    "void k_count<8>(int const*, int const*, int const*, int, int*)": [
+     5.519633333333334,
+     1.0,
+     4.449
+    ],
+    "void k_place<8>(int const*, float const*, int const*, int const*, int, int, int const*, int*, float*, int*, int*, HIP_vector_type<int, 4u>*, int, int, int*)": [
+     19.71503333333333,
+     1.0,
+     13.31
+    ],
+    "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<int>, std::array<char*, 1ul> >(int, at::native::FillFunctor<int>, std::array<char*, 1ul>)": [
+     5.426099999999999,
+     1.0,
+     1.963
+    ],
+    "count_kernel_0": [
+     5.015933333333332,
+     1.0,
+     2.485
+    ],
+    "zero_kernel_0": [
+     12.624033333333331,
+     1.0,
+     10.744
+    ],
+    "gateup_kernel_0": [
+     699.5368333333334,
+     1.0,
+     667.334
+    ],
+    "down_kernel_0": [
+     407.99916666666667,
+     1.0,
+     384.483
+    ]
+   },
+   "gpu_busy": [
+    0,
+    3
+   ]
+  },
+  "tpr4096": {
+   "rows": 32768,
+   "valid": 21575,
+   "checks": {
+    "seed101": [
+     true,
+     "rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)"
+    ],
+    "seed201": [
+     true,
+     "rel_l2=2.314e-03 (tol 0.02) max_token_rel=1.338e-02 (tol 0.05)"
+    ],
+    "seed101 stale NaN": [
+     true,
+     "rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)"
+    ]
+   },
+   "ms": [
+    1.9483610534667968,
+    1.947769775390625,
+    1.9525762939453124,
+    1.9483294677734375,
+    1.958785858154297
+   ],
+   "kernels": {
+    "void at::native::elementwise_kernel_manual_unroll<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1} const&)::{lambda(int, bool)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1} const&)::{lambda(int, bool)#1})": [
+     14.1221,
+     1.0,
+     11.144
+    ],
+    "void k_count<8>(int const*, int const*, int const*, int, int*)": [
+     6.035633333333335,
+     1.0,
+     5.211
+    ],
+    "void k_place<8>(int const*, float const*, int const*, int const*, int, int, int const*, int*, float*, int*, int*, HIP_vector_type<int, 4u>*, int, int, int*)": [
+     22.513533333333335,
+     1.0,
+     19.605
+    ],
+    "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<int>, std::array<char*, 1ul> >(int, at::native::FillFunctor<int>, std::array<char*, 1ul>)": [
+     5.899066666666667,
+     1.0,
+     5.491
+    ],
+    "count_kernel_0": [
+     5.3434,
+     1.0,
+     4.249
+    ],
+    "zero_kernel_0": [
+     20.804333333333332,
+     1.0,
+     19.804
+    ],
+    "gateup_kernel_0": [
+     1181.751933333333,
+     1.0,
+     1102.385
+    ],
+    "down_kernel_0": [
+     694.0054666666668,
+     1.0,
+     661.541
+    ]
+   },
+   "gpu_busy": [
+    0,
+    10
+   ]
+  },
+  "tpr8192": {
+   "rows": 65536,
+   "valid": 43376,
+   "checks": {
+    "seed102": [
+     true,
+     "rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)"
+    ],
+    "seed202": [
+     true,
+     "rel_l2=2.310e-03 (tol 0.02) max_token_rel=1.186e-02 (tol 0.05)"
+    ],
+    "seed102 stale NaN": [
+     true,
+     "rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)"
+    ]
+   },
+   "ms": [
+    3.6027645874023437,
+    3.619304504394531,
+    3.632185363769531,
+    3.6232064819335936,
+    3.7816400146484375
+   ],
+   "kernels": {
+    "void at::native::elementwise_kernel_manual_unroll<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1} const&)::{lambda(int, bool)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1} const&)::{lambda(int, bool)#1})": [
+     22.659100000000006,
+     1.0,
+     21.969
+    ],
+    "void k_count<8>(int const*, int const*, int const*, int, int*)": [
+     5.889899999999999,
+     1.0,
+     5.532
+    ],
+    "void k_place<8>(int const*, float const*, int const*, int const*, int, int, int const*, int*, float*, int*, int*, HIP_vector_type<int, 4u>*, int, int, int*)": [
+     23.999466666666663,
+     1.0,
+     22.772
+    ],
+    "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<int>, std::array<char*, 1ul> >(int, at::native::FillFunctor<int>, std::array<char*, 1ul>)": [
+     5.670766666666666,
+     1.0,
+     2.725
+    ],
+    "count_kernel_0": [
+     5.682766666666668,
+     1.0,
+     4.97
+    ],
+    "zero_kernel_0": [
+     36.16883333333333,
+     1.0,
+     35.4
+    ],
+    "gateup_kernel_0": [
+     2218.8224666666665,
+     1.0,
+     2165.34
+    ],
+    "down_kernel_0": [
+     1303.1305666666667,
+     1.0,
+     1221.79
+    ]
+   },
+   "gpu_busy": [
+    0,
+    16
+   ]
+  }
+ }
+}

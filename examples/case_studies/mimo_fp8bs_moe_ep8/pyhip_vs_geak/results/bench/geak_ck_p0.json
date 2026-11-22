@@ -1,0 +1,191 @@
+{
+ "impl": "geak",
+ "sort": "ck",
+ "flydsl": "0.1.5.dev504",
+ "device": "AMD Instinct MI300X",
+ "cases": {
+  "tpr2048": {
+   "rows": 32768,
+   "valid": 10841,
+   "checks": {
+    "seed100": [
+     true,
+     "rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)"
+    ],
+    "seed200": [
+     true,
+     "rel_l2=2.305e-03 (tol 0.02) max_token_rel=1.213e-02 (tol 0.05)"
+    ],
+    "seed100 stale NaN": [
+     true,
+     "rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)"
+    ]
+   },
+   "ms": [
+    1.073644485473633,
+    1.0734131622314453,
+    1.0807035064697266,
+    1.0742154693603516,
+    1.0790702056884767
+   ],
+   "kernels": {
+    "void ck_tile::kentry<2, ck_tile::MoeSortingClearWorkspaceKernel<ck_tile::MoeSortingClearWorkspaceProblem<true, 1024, 1> >, ck_tile::MoeSortingClearWorkspaceKernel<ck_tile::MoeSortingClearWorkspaceProblem<true, 1024, 1> >::Kargs>(ck_tile::MoeSortingClearWorkspaceKernel<ck_tile::MoeSortingClearWorkspaceProblem<true, 1024, 1> >::Kargs)": [
+     6.928233333333334,
+     1.0,
+     5.532
+    ],
+    "void ck_tile::kentry<256, ck_tile::MoeSortingMultiPhaseKernel_P0_v1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 4, true, true, true> >, ck_tile::MoeSortingMultiPhaseKernel_P0_v1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 4, true, true, true> >::Kargs>(ck_tile::MoeSortingMultiPhaseKernel_P0_v1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 4, true, true, true> >::Kargs)": [
+     6.9054333333333355,
+     1.0,
+     5.411
+    ],
+    "void ck_tile::kentry<2, ck_tile::MoeSortingMultiPhaseKernel_P1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >, ck_tile::MoeSortingMultiPhaseKernel_P1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >::Kargs>(ck_tile::MoeSortingMultiPhaseKernel_P1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >::Kargs)": [
+     6.945766666666668,
+     1.0,
+     4.81
+    ],
+    "void ck_tile::kentry<2, ck_tile::MoeSortingMultiPhaseKernel_P23<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >, ck_tile::MoeSortingMultiPhaseKernel_P23<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >::Kargs>(ck_tile::MoeSortingMultiPhaseKernel_P23<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >::Kargs)": [
+     50.676766666666666,
+     1.0,
+     35.16
+    ],
+    "moe_fp8bs_gemm1_0": [
+     668.0766,
+     1.0,
+     578.169
+    ],
+    "moe_s2_fp8bs_0": [
+     386.46370000000013,
+     1.0,
+     337.616
+    ]
+   },
+   "gpu_busy": [
+    0,
+    5
+   ]
+  },
+  "tpr4096": {
+   "rows": 32768,
+   "valid": 21575,
+   "checks": {
+    "seed101": [
+     true,
+     "rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)"
+    ],
+    "seed201": [
+     true,
+     "rel_l2=2.314e-03 (tol 0.02) max_token_rel=1.338e-02 (tol 0.05)"
+    ],
+    "seed101 stale NaN": [
+     true,
+     "rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)"
+    ]
+   },
+   "ms": [
+    1.9563481140136718,
+    1.9606484985351562,
+    1.9623556518554688,
+    1.9665312194824218,
+    1.965089111328125
+   ],
+   "kernels": {
+    "void ck_tile::kentry<2, ck_tile::MoeSortingClearWorkspaceKernel<ck_tile::MoeSortingClearWorkspaceProblem<true, 1024, 1> >, ck_tile::MoeSortingClearWorkspaceKernel<ck_tile::MoeSortingClearWorkspaceProblem<true, 1024, 1> >::Kargs>(ck_tile::MoeSortingClearWorkspaceKernel<ck_tile::MoeSortingClearWorkspaceProblem<true, 1024, 1> >::Kargs)": [
+     7.322599999999998,
+     1.0,
+     6.695
+    ],
+    "void ck_tile::kentry<256, ck_tile::MoeSortingMultiPhaseKernel_P0_v1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 4, true, true, true> >, ck_tile::MoeSortingMultiPhaseKernel_P0_v1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 4, true, true, true> >::Kargs>(ck_tile::MoeSortingMultiPhaseKernel_P0_v1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 4, true, true, true> >::Kargs)": [
+     7.702,
+     1.0,
+     7.176
+    ],
+    "void ck_tile::kentry<2, ck_tile::MoeSortingMultiPhaseKernel_P1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >, ck_tile::MoeSortingMultiPhaseKernel_P1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >::Kargs>(ck_tile::MoeSortingMultiPhaseKernel_P1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >::Kargs)": [
+     10.0328,
+     1.0,
+     8.619
+    ],
+    "void ck_tile::kentry<2, ck_tile::MoeSortingMultiPhaseKernel_P23<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >, ck_tile::MoeSortingMultiPhaseKernel_P23<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >::Kargs>(ck_tile::MoeSortingMultiPhaseKernel_P23<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >::Kargs)": [
+     88.56136666666667,
+     1.0,
+     82.629
+    ],
+    "moe_fp8bs_gemm1_0": [
+     1173.0973999999999,
+     1.0,
+     1063.987
+    ],
+    "moe_s2_fp8bs_0": [
+     667.4640333333335,
+     1.0,
+     592.572
+    ]
+   },
+   "gpu_busy": [
+    0,
+    5
+   ]
+  },
+  "tpr8192": {
+   "rows": 65536,
+   "valid": 43376,
+   "checks": {
+    "seed102": [
+     true,
+     "rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)"
+    ],
+    "seed202": [
+     true,
+     "rel_l2=2.310e-03 (tol 0.02) max_token_rel=1.186e-02 (tol 0.05)"
+    ],
+    "seed102 stale NaN": [
+     true,
+     "rel_l2=2.312e-03 (tol 0.02) max_token_rel=1.122e-02 (tol 0.05)"
+    ]
+   },
+   "ms": [
+    3.733948974609375,
+    3.753680419921875,
+    3.7527474975585937,
+    3.762645568847656,
+    3.7683099365234374
+   ],
+   "kernels": {
+    "void ck_tile::kentry<2, ck_tile::MoeSortingClearWorkspaceKernel<ck_tile::MoeSortingClearWorkspaceProblem<true, 1024, 1> >, ck_tile::MoeSortingClearWorkspaceKernel<ck_tile::MoeSortingClearWorkspaceProblem<true, 1024, 1> >::Kargs>(ck_tile::MoeSortingClearWorkspaceKernel<ck_tile::MoeSortingClearWorkspaceProblem<true, 1024, 1> >::Kargs)": [
+     8.205966666666665,
+     1.0,
+     7.497
+    ],
+    "void ck_tile::kentry<256, ck_tile::MoeSortingMultiPhaseKernel_P0_v1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 4, true, true, true> >, ck_tile::MoeSortingMultiPhaseKernel_P0_v1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 4, true, true, true> >::Kargs>(ck_tile::MoeSortingMultiPhaseKernel_P0_v1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 4, true, true, true> >::Kargs)": [
+     11.0805,
+     1.0,
+     10.423
+    ],
+    "void ck_tile::kentry<2, ck_tile::MoeSortingMultiPhaseKernel_P1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >, ck_tile::MoeSortingMultiPhaseKernel_P1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >::Kargs>(ck_tile::MoeSortingMultiPhaseKernel_P1<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >::Kargs)": [
+     14.917200000000001,
+     1.0,
+     14.352
+    ],
+    "void ck_tile::kentry<2, ck_tile::MoeSortingMultiPhaseKernel_P23<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >, ck_tile::MoeSortingMultiPhaseKernel_P23<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >::Kargs>(ck_tile::MoeSortingMultiPhaseKernel_P23<ck_tile::MoeSortingProblemMp<int, float, unsigned char, 16, true, true, true> >::Kargs)": [
+     162.53556666666663,
+     1.0,
+     160.689
+    ],
+    "moe_fp8bs_gemm1_0": [
+     2275.4064,
+     1.0,
+     2182.339
+    ],
+    "moe_s2_fp8bs_0": [
+     1280.6555999999998,
+     1.0,
+     1190.217
+    ]
+   },
+   "gpu_busy": [
+    0,
+    4
+   ]
+  }
+ }
+}

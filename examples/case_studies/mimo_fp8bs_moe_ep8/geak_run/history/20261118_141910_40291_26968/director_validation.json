@@ -1,0 +1,19 @@
+{
+  "kernel_name": "mimo_fp8bs_moe_ep8",
+  "director_verified_speedup_geomean": 0.99853,
+  "director_verified_speedup_arithmetic": 0.99853,
+  "director_verified_speedup_weighted": 0.99853,
+  "tech_lead_reported_speedup_geomean": 1.0,
+  "validation_status": "accepted",
+  "timing_basis": "not_applicable",
+  "timing_receipt": null,
+  "cache_basis": "not_applicable",
+  "correctness": "pass",
+  "per_case": [
+    {"name": "tpr2048", "baseline_ms": 1.6737, "optimized_ms": 1.6742, "speedup": 0.9997},
+    {"name": "tpr4096", "baseline_ms": 3.2115, "optimized_ms": 3.2200, "speedup": 0.9974}
+  ],
+  "applied_to_original": "false",
+  "arbitration_note": "final_patch.diff is EMPTY — no committable improvement was found (TechLead reported geomean 1.000, FINAL_WINNER=null). Independently rebuilt the validation workspace from the TRUE original; the empty patch is a validated no-op, so the candidate is byte-identical to the baseline. Correctness PASS (tpr2048 rel_l2=5.1e-3, tpr4096 rel_l2=5.1e-3, both well under tol). Full benchmark: tpr2048 1.6742 ms vs baseline 1.6737, tpr4096 3.2200 ms vs baseline 3.2115 — geomean 0.9985x, entirely within measurement noise of 1.0. Director (0.9985) matches TechLead's claim (1.0) within 10% -> accepted as a no-improvement result. Baseline came from this lane's own baseline_timing.json (FROZEN_ORACLE=false -> no timing receipt, timing_basis=not_applicable). No invalid_measurements.jsonl / source-binding failures found; no orphan GPU leases. The best isolated-but-unbanked lever (valid-row-aware block_m=64 on tpr4096, ~1.016x geomean) sat below the commit gate because the gain is confined to one case while tpr2048 is neutral; the user's from-scratch FlyDSL block-scale grouped-GEMM mandate was not deliverable within the 8-direction budget (std moe_gemm_2stage cannot represent 128x128/1x128 block-scale and has an i32 compile bug for non-fp4 dtypes; the authorable fp4 mixed_moe_gemm_2stage skeleton route is a multi-round build).",
+  "final_patch": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261118_141910_40291_26968/mimo_fp8bs_moe_ep8/final_patch.diff"
+}

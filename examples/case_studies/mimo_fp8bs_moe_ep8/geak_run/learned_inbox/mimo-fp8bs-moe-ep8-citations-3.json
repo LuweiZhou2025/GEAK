@@ -1,0 +1,69 @@
+{
+  "run_id": "mimo_fp8bs_moe_ep8-citations",
+  "date": "2026-11-19",
+  "kernel_names": [
+    "mimo_fp8bs_moe_ep8"
+  ],
+  "validation_status": "accepted",
+  "box_quiet": true,
+  "held_out": false,
+  "cards": [],
+  "citations": [
+    {
+      "card": "delete-the-satellite-dispatches-once-both-moe-gemms-sit-at-t-moe-grouped-gemm-gfx950-both.md",
+      "round": 1,
+      "direction": "r1_d1",
+      "specialty": "host_runtime",
+      "cited_then_verified": 0,
+      "became_winner": false
+    },
+    {
+      "card": "collapse-a-redundant-launch-grid-instead-of-guarding-inside--linear-attention-gfx950-launch-bound.md",
+      "round": 1,
+      "direction": "r1_d1",
+      "specialty": "host_runtime",
+      "cited_then_verified": 0,
+      "became_winner": false
+    },
+    {
+      "card": "price-a-counter-with-a-deletion-control-before-funding-a-rou-moe-grouped-gemm-gfx950-prefill.md",
+      "round": 1,
+      "direction": "r1_d1",
+      "specialty": "host_runtime",
+      "cited_then_verified": 0,
+      "became_winner": false
+    },
+    {
+      "card": "invert-the-xcd-round-robin-with-a-chunk-interleaved-workgrou-moe-grouped-gemm-gfx950-mixed.md",
+      "round": 2,
+      "direction": "r2_d0",
+      "specialty": "memory",
+      "cited_then_verified": 0,
+      "became_winner": false
+    },
+    {
+      "card": "price-a-counter-with-a-deletion-control-before-funding-a-rou-moe-grouped-gemm-gfx950-prefill.md",
+      "round": 3,
+      "direction": "r3_d0",
+      "specialty": "compute",
+      "cited_then_verified": 1.6192,
+      "became_winner": false
+    },
+    {
+      "card": "instruction-cuts-on-a-co-resident-pipe-do-not-convert-moe-grouped-gemm-gfx950-prefill.md",
+      "round": 3,
+      "direction": "r3_d0",
+      "specialty": "compute",
+      "cited_then_verified": 1.6192,
+      "became_winner": false
+    },
+    {
+      "card": "cache-policy-is-a-per-buffer-per-bucket-decision-on-a-bf16-f-moe-grouped-gemm-gfx950-both.md",
+      "round": 4,
+      "direction": "r4_d2",
+      "specialty": "memory",
+      "cited_then_verified": 0,
+      "became_winner": false
+    }
+  ]
+}

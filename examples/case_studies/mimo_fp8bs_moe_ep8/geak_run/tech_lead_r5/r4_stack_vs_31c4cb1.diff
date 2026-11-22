@@ -1,0 +1,614 @@
+diff --git a/flydsl_moe_fp8bs.py b/flydsl_moe_fp8bs.py
+index a68579c..a5abbaf 100644
+--- a/flydsl_moe_fp8bs.py
++++ b/flydsl_moe_fp8bs.py
+@@ -82,6 +82,22 @@ _EPI_MAXNUM = int(_os.environ.get("FBS_EPI_MAXNUM", "1"))
+ # variant list starting at m_repeat ("4,2,1"); "0" = off. Skipped subtiles keep zero accumulators, so the
+ # (unchanged) epilogue still writes every a2/a2s row of the block.
+ _G1_PADSKIP = _os.environ.get("FBS_PADSKIP", "4,2,1")
++# ---- r4_d2: repair the gemm1 pad-skip's energy leak (knobs are in _G1_KNOBS -> distinct compiled kernels per setting) ----
++# FBS_PS_PRO=1 (default): every padskip variant owns its prologue (X tile 0 + the _BPF-deep B prefetch queue), i.e. the variant
++# branch comes BEFORE the prologue and no prologue value is live across it. R3's shared prologue (+ SimplifyCFG hoisting of the
++# reduced bodies' common prefix) left the 1-/2-subtile bodies with 35 VGPR spills (120 B/lane scratch, +15% gemm1 EA writes);
++# per-variant prologue: 244 VGPR, 0 spills, full-body census equal to the no-skip body's. 0 = R3 shared prologue.
++_PS_PRO = int(_os.environ.get("FBS_PS_PRO", "1"))
++# FBS_PS_SLEEP="S2,S1" (default "8,12"): s_sleep count (x64 clk) at the end of every K tile of the 2- / 1-subtile bodies. Unpaced
++# tails last 0.71-0.80x of a full CTA, finish ~14 us before their same-expert siblings and perturb the CTA dispatch rhythm (median
++# sibling start spread 2 -> 6-10 us): +1.6-1.8M (2048) / +1.2M (4096) gemm1 L2 misses per call. 8,12 keeps tails at ~0.85-0.9x:
++# -0.4..-0.7M misses; longer/self-timed pacing (1.0x) loses slot time (a sleeping tail's co-resident CTA only gains 5-11%).
++# "0" = off (R3).
++_PS_SLEEP = _os.environ.get("FBS_PS_SLEEP", "8,12")
++# FBS_PADZERO=1 (default): padding rows (sorted id >= tokens) gather X through an out-of-range buffer offset (row `tokens` of x_rsrc)
++# -> zeros without a memory access, instead of token 0's row: executed padding MFMA rows multiply zeros and a2 padding rows are 0
++# (s2's full body still reads them in 3-active blocks). Valid-row a2/a2s are unchanged. 0 = R3 (token 0's row).
++_PADZERO = int(_os.environ.get("FBS_PADZERO", "1"))
+ 
+ 
+ def _parse_padskip(spec, m_repeat):
+@@ -223,7 +239,15 @@ def hot_loop_sched(*, n_dsrd, n_vmem, n_mfma, n_dswr, mode=None, groups=8):
+ # ----------------------------------------------------------------------------------------------
+ _G1_KNOBS = ("_DBG_NOSCALE", "_TR", "_MF32", "_MF32_NODEFER", "_SX_FIRST", "_DEFER", "_DBG_NOBAR", "_DSRD_FIX",
+              "_BPF", "_DBG_BK0", "_DBG_NOEPI", "_SX_TAB", "_PK_SPLIT", "_VALID_TOK", "_SLOAD", "_G1_PRIO",
+-             "_SCHED_MODE", "_SCHED_G1", "_WPE", "_RS", "_EPI_MAXNUM")
++             "_SCHED_MODE", "_SCHED_G1", "_WPE", "_RS", "_EPI_MAXNUM", "_PS_PRO", "_PS_SLEEP", "_PADZERO")
++
++
++def _parse_sleep(spec, pad_variants):
++    """FBS_PS_SLEEP "S2,S1" -> {m_eff: s_sleep count} for the reduced variants, in descending m_eff order ("0"/"" = off)."""
++    if not spec or spec.strip() in ("0", "off"):
++        return {}
++    vals = [int(v) for v in spec.split(",") if v.strip()]
++    return {m: n for m, n in zip(pad_variants[1:], vals) if n > 0}
+ 
+ 
+ def compile_stage1(*, model_dim: int, inter_dim: int, experts: int, topk: int,
+@@ -262,6 +286,9 @@ def _compile_stage1(*, model_dim: int, inter_dim: int, experts: int, topk: int,
+     _WPE = kn["_WPE"]
+     _RS = kn["_RS"]
+     _EPI_MAXNUM = kn["_EPI_MAXNUM"]
++    _PS_PRO = kn["_PS_PRO"]
++    _PS_SLEEP = kn["_PS_SLEEP"]
++    _PADZERO = kn["_PADZERO"]
+     tile_k = BLK
+     gpu_arch = get_hip_arch()
+     allocator = SmemAllocator(None, arch=gpu_arch)
+@@ -285,6 +312,8 @@ def _compile_stage1(*, model_dim: int, inter_dim: int, experts: int, topk: int,
+     pad_variants = tuple(padskip) if padskip else (m_repeat,)
+     if len(pad_variants) > 1 and (_MF32 or not _TR or _DBG_NOSCALE or _DBG_NOEPI or pad_variants[0] != m_repeat):
+         raise ValueError("gemm1 padskip is built for the default _TR 16x16 path")
++    own_pro = len(pad_variants) > 1 and _PS_PRO == 1
++    sleep_of = _parse_sleep(_PS_SLEEP, pad_variants) if len(pad_variants) > 1 else {}
+ 
+     # LDS: X ping-pong | x_scale [num_kb, tile_m] f32 | row-max [4, tile_m] f32
+     lds_x_bytes = 2 * tile_m * lds_stride
+@@ -414,7 +443,8 @@ def _compile_stage1(*, model_dim: int, inter_dim: int, experts: int, topk: int,
+                 t_raw = fused_i & mask24
+                 t_valid_i32 = arith.cmpi(arith.CmpIPredicate.ult, t_raw, tokens_i32)
+                 t_idx = arith.index_cast(T.index, t_raw)
+-                t_safe = t_valid_i32.select(t_idx, fx.Index(0))
++                # FBS_PADZERO: padding rows -> row `tokens` = first out-of-range row of x_rsrc -> buffer loads return 0
++                t_safe = t_valid_i32.select(t_idx, tokens_in if _PADZERO else fx.Index(0))
+                 x_row_base_div4.append(t_safe * c_k_div4)
+ 
+             def load_x_tile(base_k):
+@@ -724,14 +754,19 @@ def _compile_stage1(*, model_dim: int, inter_dim: int, experts: int, topk: int,
+             rocdl.sched_barrier(0)
+ 
+             total_tiles = num_kb
+-            # prologue
+-            x_regs = load_x_tile(fx.Index(0))
+-            bq0 = []  # B prefetch queue (depth _BPF tiles); shared prologue of every padskip variant body
+-            for pf in range_constexpr(min(_BPF, total_tiles)):
+-                bq0.append((load_b_tile(fx.Index(pf * tile_k), n_blk_gate, n_intra_gate),
+-                            load_b_tile(fx.Index(pf * tile_k), n_blk_up, n_intra_up)))
+-            store_x_tile_to_lds(x_regs, lds_pong)
+-            gpu.barrier()
++
++            def prologue():
++                x_regs = load_x_tile(fx.Index(0))
++                bq_ = []  # B prefetch queue (depth _BPF tiles)
++                for pf in range_constexpr(min(_BPF, total_tiles)):
++                    bq_.append((load_b_tile(fx.Index(pf * tile_k), n_blk_gate, n_intra_gate),
++                                load_b_tile(fx.Index(pf * tile_k), n_blk_up, n_intra_up)))
++                store_x_tile_to_lds(x_regs, lds_pong)
++                gpu.barrier()
++                return bq_
++
++            # prologue: shared by every padskip variant body (R3, FBS_PS_PRO=0) or owned by each variant (FBS_PS_PRO=1)
++            bq0 = None if own_pro else prologue()
+             acc_gate0, acc_up0 = acc_gate, acc_up
+ 
+             def kbody(m_eff):
+@@ -741,7 +776,7 @@ def _compile_stage1(*, model_dim: int, inter_dim: int, experts: int, topk: int,
+                 ckw = {} if m_eff == m_repeat else {"m_eff": m_eff}
+                 acc_gate = list(acc_gate0)
+                 acc_up = list(acc_up0)
+-                bq = list(bq0)
++                bq = prologue() if own_pro else list(bq0)
+                 bufs = [lds_pong, lds_ping]
+                 if const_expr(_G1_PRIO == 1):
+                     # whole K loop at priority 1 (s_setprio is a scheduling boundary: per-tile toggles (mode 2, the
+@@ -775,6 +810,9 @@ def _compile_stage1(*, model_dim: int, inter_dim: int, experts: int, topk: int,
+                         hot_loop_sched(n_dsrd=n_dsrd_, n_vmem=num_x_loads + nv_b,
+                                        n_mfma=n_mfma_, n_dswr=num_x_loads,
+                                        mode=_SCHED_MODE, groups=_SCHED_G1)
++                    if const_expr(m_eff in sleep_of):
++                        # FBS_PS_SLEEP pacing of a reduced (tail) body: idle, no MFMA energy, part of the skipped MFMA time
++                        rocdl.s_sleep(sleep_of[m_eff])
+                     if const_expr(not _DBG_NOBAR):
+                         gpu.barrier()
+                 b_g_cur, b_u_cur = bq.pop(0)
+diff --git a/flydsl_moe_fp8bs_s2.py b/flydsl_moe_fp8bs_s2.py
+index b02c5c6..0b2d28b 100644
+--- a/flydsl_moe_fp8bs_s2.py
++++ b/flydsl_moe_fp8bs_s2.py
+@@ -109,6 +109,51 @@ _WPE = int(os.environ.get("S2_WPE", "2"))  # >0: rocdl.waves_per_eu attribute (2
+ # isolated s2 -2.2% / -1.2% (9/9 rounds each); full-body ISA unchanged (1024 MFMA, 668 FMA, 178 pk_fma), 246 VGPR,
+ # no spills. "4,3,2,1" / "4,2" perturb the full body or spill (s2 -0.3%/0.0%, -0.5%/0.0%).
+ _PADSKIP = os.environ.get("S2_PADSKIP", "4,2,1")
++# Single-local-expert plain stores (r4_d1). With moe_sort_fast(single_flags=True) the sorted id of every entry of a
++# token with exactly one local entry carries bit 31 and its moe_buf row is NOT zero-filled. stage2_fp8bs(sstore=1)
++# (compile knob sstore) then writes each epilogue row with ONE straight-line inline-asm block: plain
++# global_store_dword under exec = (valid & single), global_atomic_pk_add_bf16 under exec = (valid & multi), restore
++# exec. Padding rows run with exec = 0 for both (no zero atomics into real rows any more), and no row ever receives
++# both a plain store and an atomic. No branches (R2: per-row uniform branches spilled to 521 VGPR).
++# S2_SST_POL: cache-policy suffix of the plain stores (0 none, 1 nt, 2 sc1, 3 sc0 sc1). Default 1 (nt): the plain-
++# stored rows otherwise sit in L2 as dirty lines (the atomics they replace are L2-uncached EA RMWs) and push s2's EA
++# reads up +8/+17 MB; nt recovers 6.5/7 MB of that (rocprofv3) at equal-or-better forward time (+0.23% geo vs 0, 11/15).
++_SST_POL = int(os.environ.get("S2_SST_POL", "1"))
++# ---- r4_d0 scale-math knobs (passed explicitly into compile_stage2_fp8bs -> part of its lru key) ----
++# S2_RS: K-loop block-scale rescale form. 0 = f32x4 llvm.fma (lowered to v_pk_fma_f32 pairs; LLVM's
++# SIPreEmitPeephole unpacks only those inside MFMA shadows: full body 668 v_fma_f32 + 178 v_pk_fma_f32);
++# 1 = 4 scalar llvm.fma per f32x4 rescale, element i with scale element i (v_fma_f32/v_fmac_f32 only). gfx942: any
++# V_PK_*_F32 waits for the SIMD's matrix pipe to drain, whichever wave owns the MFMA (r3_d0 micro-bench).
++_RS = int(os.environ.get("S2_RS", "1"))
++# S2_RS_NV: VALU per MFMA slot of the K-loop sched_group_barrier pattern when S2_RS=1 (4 scalar FMAs per f32x4
++# rescale; 2 keeps the S2_RS=0 slot layout, one v_pk_fma_f32 slot <-> two v_fma_f32).
++_RS_NV = int(os.environ.get("S2_RS_NV", "2"))
++
++
++def _fma_sc4(a, s, c):
++    """a * s + c on f32xN vectors as N scalar llvm.fma (v_fma_f32); element i uses s[i] (per-row scale)."""
++    a, s, c = arith.unwrap(a), arith.unwrap(s), arith.unwrap(c)
++    nel = ir.VectorType(a.type).shape[0]
++    outs = []
++    for i in range(nel):
++        ai = vector.extract(a, static_position=[i], dynamic_position=[])
++        si = vector.extract(s, static_position=[i], dynamic_position=[])
++        ci = vector.extract(c, static_position=[i], dynamic_position=[])
++        outs.append(fmath.fma(arith.unwrap(ai), arith.unwrap(si), arith.unwrap(ci)))
++    return vector.from_elements(T.vec(nel, T.f32), outs)
++
++
++def _mul_sc4(a, b, b_scalar=False):
++    """Element-wise a * b of f32xN vectors (b_scalar: b is one f32) as N scalar arith.mulf (v_mul_f32)."""
++    a, b = arith.unwrap(a), arith.unwrap(b)
++    nel = ir.VectorType(a.type).shape[0]
++    b_vec = not b_scalar
++    outs = []
++    for i in range(nel):
++        ai = _w(vector.extract(a, static_position=[i], dynamic_position=[]))
++        bi = _w(vector.extract(b, static_position=[i], dynamic_position=[])) if b_vec else _w(b)
++        outs.append(arith.unwrap(ai * bi))
++    return vector.from_elements(T.vec(nel, T.f32), outs)
+ 
+ 
+ def _parse_padskip(spec, m_repeat):
+@@ -136,6 +181,33 @@ def _variant_chain(cnt_i32, vs, body):
+         scf.YieldOp([])
+ 
+ 
++_SST_POLS = {0: "", 1: " nt", 2: " sc1", 3: " sc0 sc1"}
++
++
++def _sst_emit(addr_i64, datas, kind_s, pol=0):
++    """One straight-line inline-asm block per epilogue row (r4_d1 single-row plain stores):
++         saved = exec
++         exec  = (kind == 1) ? saved : 0 -> global_store_dword x n        (token with exactly one local entry)
++         exec  = (kind == 2) ? saved : 0 -> global_atomic_pk_add_bf16 x n (multi-local-expert token)
++         exec  = saved
++    addr_i64: per-lane 64-bit byte address of this row's first 128-col chunk; datas[hc]: packed 2 x bf16 of chunk hc
++    (byte offset hc*256). kind_s: uniform i32 in an SGPR (readfirstlane), 0 = padding (no memory op at all).
++    exec is only modified inside the asm block, so no compiler-scheduled VALU can run under the narrowed mask
++    (a 64-bit mask operand with an "s" constraint was silently given VGPRs, hence the SCC/s_cmov form)."""
++    n = len(datas)
++    pst = _SST_POLS[int(pol)]
++    lines = ["s_mov_b64 $0, exec", "s_cmp_lg_u32 $1, 1", "s_cmov_b64 exec, 0"]
++    for hc in range(n):
++        lines.append(f"global_store_dword $2, ${3 + hc}, off" + (f" offset:{hc * 256}" if hc else "") + pst)
++    lines += ["s_mov_b64 exec, $0", "s_cmp_lg_u32 $1, 2", "s_cmov_b64 exec, 0"]
++    for hc in range(n):
++        lines.append(f"global_atomic_pk_add_bf16 $2, ${3 + hc}, off" + (f" offset:{hc * 256}" if hc else ""))
++    lines.append("s_mov_b64 exec, $0")
++    cons = "=&s,s,v," + ",".join(["v"] * n) + ",~{scc},~{memory}"
++    ops = [arith.unwrap(kind_s), arith.unwrap(addr_i64)] + [arith.unwrap(d) for d in datas]
++    llvm.inline_asm(T.i64, ops, "\n".join(lines), cons, has_side_effects=True)
++
++
+ class _IfThen:
+     def __init__(self, cond):
+         self.op = scf.IfOp(cond)
+@@ -185,8 +257,14 @@ def compile_stage2_fp8bs(
+     xcm: int = -1,
+     b2ku: int = -1,
+     padskip: tuple = (),
++    sstore: int = 0,
++    sst_pol: int = 0,
++    rs: int = 0,
++    rs_nv: int = 2,
+ ):
+     vm_mode = _VM_MODE if vm_mode < 0 else vm_mode
++    if sstore and (epi_mode != 3 or dbg != 0):
++        raise ValueError("sstore (single-row plain stores) is built for the epi_mode 3 path only")
+     bcm = _BCM if bcm < 0 else bcm
+     b2ku = _B2_KU if b2ku < 0 else b2ku
+     xcm = _XCM if xcm < 0 else xcm
+@@ -594,16 +672,26 @@ def compile_stage2_fp8bs(
+                                 acc[mi * num_acc_n + ni] = tp[ni]
+                         elif const_expr(prev is not None):
+                             ptp, ps, pmi = prev
+-                            f = ps * swv if not fpre else ps
+-                            for ni in range_constexpr(num_acc_n):
+-                                idx = pmi * num_acc_n + ni
+-                                acc[idx] = fmath.fma(ptp[ni], f, acc[idx])
+-                            n_valu = (1 if not fpre else 0) + num_acc_n
++                            if const_expr(rs):
++                                # per-element scalar FMAs (v_fma_f32), no V_PK_*_F32 in the MFMA loop
++                                f = ps if fpre else _mul_sc4(ps, swv, b_scalar=True)
++                                for ni in range_constexpr(num_acc_n):
++                                    idx = pmi * num_acc_n + ni
++                                    acc[idx] = _fma_sc4(ptp[ni], f, acc[idx])
++                                n_valu = 4 * ((1 if not fpre else 0) + num_acc_n)
++                            else:
++                                f = ps * swv if not fpre else ps
++                                for ni in range_constexpr(num_acc_n):
++                                    idx = pmi * num_acc_n + ni
++                                    acc[idx] = fmath.fma(ptp[ni], f, acc[idx])
++                                n_valu = (1 if not fpre else 0) + num_acc_n
+                         if const_expr(dbg != 6):
+                             prev = (tp, s_cur, mi)
+                         if const_expr(sched >= 1):
+                             n_mfma = k_unroll * 2 * num_acc_n
+-                            rem_ds, rem_vm, rem_va = n_ds, n_vm, n_valu * 2
++                            # rs=0: n_valu f32x4 ops = 2 v_pk_* each; rs=1: n_valu scalar VALU
++                            rem_ds, rem_vm, rem_va = n_ds, n_vm, (n_valu if rs else n_valu * 2)
++                            va_per = rs_nv if rs else va_nv
+                             for si in range_constexpr(n_mfma):
+                                 if const_expr(rem_ds > 0):
+                                     rocdl.sched_dsrd(1)
+@@ -613,7 +701,7 @@ def compile_stage2_fp8bs(
+                                     rem_vm -= 1
+                                 rocdl.sched_mfma(1)
+                                 if const_expr(rem_va > 0 and si >= va_st):
+-                                    nv = min(va_nv, rem_va)
++                                    nv = min(va_per, rem_va)
+                                     rocdl.sched_group_barrier(0x002, nv, 0)
+                                     rem_va -= nv
+                             rocdl.sched_barrier(0)
+@@ -632,10 +720,16 @@ def compile_stage2_fp8bs(
+                             s_cur = s_nxt
+                     if const_expr(dbg != 6):
+                         ptp, ps, pmi = prev
+-                        f = ps * swv if not fpre else ps
+-                        for ni in range_constexpr(num_acc_n):
+-                            idx = pmi * num_acc_n + ni
+-                            acc[idx] = fmath.fma(ptp[ni], f, acc[idx])
++                        if const_expr(rs):
++                            f = ps if fpre else _mul_sc4(ps, swv, b_scalar=True)
++                            for ni in range_constexpr(num_acc_n):
++                                idx = pmi * num_acc_n + ni
++                                acc[idx] = _fma_sc4(ptp[ni], f, acc[idx])
++                        else:
++                            f = ps * swv if not fpre else ps
++                            for ni in range_constexpr(num_acc_n):
++                                idx = pmi * num_acc_n + ni
++                                acc[idx] = fmath.fma(ptp[ni], f, acc[idx])
+                     if const_expr(has_next):
+                         sw_cur = sw_new[0]
+                         a_first = a_nf
+@@ -695,7 +789,33 @@ def compile_stage2_fp8bs(
+                             c = fx.Index(hc * 128) + lane_id * fx.Index(2)
+                             v8s.append(vector.load_op(T.vec(4, T.i32), lds_epi_i32,
+                                                       [g * fx.Index(e2_gstride // 2) + c * fx.Index(2)]))
+-                        for u in range_constexpr(e2_upw):
++                        for gi in range_constexpr(e2_gpw if sstore else 0):
++                            # single-row plain store / multi-row atomic, selected per row by exec (no branch)
++                            for ii in range_constexpr(4):
++                                idv = _w(_rocdl_d.readfirstlane(T.i32, arith.unwrap(ep_ids2[(h * e2_gpw + gi) * 4 + ii])))
++                                t2 = idv & mask24
++                                sl = (idv >> fx.Int32(24)) & fx.Int32(0x7F)
++                                t_ok = arith.cmpi(arith.CmpIPredicate.ult, t2, tokens_i32) & arith.cmpi(
++                                    arith.CmpIPredicate.ult, sl, topk_i32)
++                                one = arith.cmpi(arith.CmpIPredicate.slt, idv, fx.Int32(0))
++                                kind = arith.select(t_ok, arith.select(one, fx.Int32(1), fx.Int32(2)), fx.Int32(0))
++                                kind_s = _w(_rocdl_d.readfirstlane(T.i32, arith.unwrap(kind)))
++                                trow = arith.select(t_ok, t2, fx.Int32(0))
++                                row_b = out_base + (arith.index_cast(T.index, trow) * fx.Index(hidden_dim) + by_n) * fx.Index(2)
++                                addr = _w(arith.index_cast(T.i64, row_b)) + _w(arith.extui(T.i64, arith.unwrap(lane_off[0])))
++                                ds = []
++                                for hc in range_constexpr(e2_nhc):
++                                    u = gi * e2_nhc + hc
++                                    wa = _w(vector.extract(v8s[u], static_position=[ii // 2], dynamic_position=[]))
++                                    wb = _w(vector.extract(v8s[u], static_position=[2 + ii // 2], dynamic_position=[]))
++                                    if const_expr(e3_perm):
++                                        ds.append(_perm(wb, wa, 0x05040100 if ii % 2 == 0 else 0x07060302))
++                                    elif const_expr(ii % 2 == 0):
++                                        ds.append((wa & fx.Int32(65535)) | (wb << fx.Int32(16)))
++                                    else:
++                                        ds.append((wa >> fx.Int32(16)) & fx.Int32(65535) | (wb & fx.Int32(-65536)))
++                                _sst_emit(addr, ds, kind_s, sst_pol)
++                        for u in range_constexpr(e2_upw if not sstore else 0):
+                             gi = u // e2_nhc
+                             hc = u % e2_nhc
+                             for ii in range_constexpr(4):
+@@ -1023,21 +1143,38 @@ def _xcd_grid_m(blocks, n_tiles, gn, ordr=0, cc=8):
+     return max(1, -(-(per_xcd * 8) // n_tiles))
+ 
+ 
++def _resolve_epi(inter, tile_m, tile_n, epi_mode=0):
++    fpre = _FPRE if ((inter // 128) * (tile_m // 4) == 256 and tile_n % 128 == 0) else 0
++    epi = epi_mode if _EPI < 0 else _EPI
++    if epi == 3 and not fpre:
++        epi = 2
++    return fpre, epi
++
++
++def sstore_supported(inter, tile_m=64, tile_n=256):
++    """True when stage2_fp8bs(sstore=1) can run (fpre + epi_mode 3 path, no debug mode): only then may the sort
++    emit single flags (moe_sort_fast single_flags=True leaves those rows unzeroed)."""
++    fpre, epi = _resolve_epi(inter, tile_m, tile_n)
++    return bool(fpre) and epi == 3 and not _DBG
++
++
+ def stage2_fp8bs(out, a2, w2, a2_scale, w2_scale_flat, sorted_ids, sorted_expert_ids, sorted_weights,
+                  num_valid_ids, tokens, S, blocks, stream, *, topk, tile_m=64, tile_n=256, grid_m=None,
+-                 sched=1, epi_mode=0, dbg=0, blk_cnt=None):
++                 sched=1, epi_mode=0, dbg=0, blk_cnt=None, sstore=False):
+     """Same argument order as d0's compile_stage2 launcher. a2 [S, inter] fp8 (sorted rows),
+     a2_scale [inter/128, S] fp32 (kb-major), w2 preshuffled [E, hidden, inter].
+     blk_cnt: optional int32 [blocks] valid-row count per M block (moe_sort_fast blk_counts=True); enables the
+-    S2_PADSKIP all-padding-subtile skip. None (e.g. the CK sorting fallback) -> full-block body only."""
++    S2_PADSKIP all-padding-subtile skip. None (e.g. the CK sorting fallback) -> full-block body only.
++    sstore: sorted_ids carry single flags (moe_sort_fast single_flags=True) and single rows were not zero-filled ->
++    plain-store those rows (must be honoured: raises if this configuration cannot)."""
+     E, hidden, inter = w2.shape
+     deloop = _DELOOP or (_XCD_GN > 0)
+     # fpre needs one a2-scale vec4 per thread (inter/128 * tile_m/4 == 256 lanes) and 128-col weight-scale blocks;
+     # epi_mode 3 needs fpre (routing weight lives in its table). Other shapes fall back to the previous path.
+-    fpre = _FPRE if ((inter // 128) * (tile_m // 4) == 256 and tile_n % 128 == 0) else 0
+-    epi = epi_mode if _EPI < 0 else _EPI
+-    if epi == 3 and not fpre:
+-        epi = 2
++    fpre, epi = _resolve_epi(inter, tile_m, tile_n, epi_mode)
++    sst = 1 if sstore else 0
++    if sst and not (fpre and epi == 3 and not (_DBG or dbg)):
++        raise RuntimeError("stage2_fp8bs(sstore=True) needs the fpre / epi_mode 3 path (see sstore_supported)")
+     m_rep = tile_m // 16
+     pad_vs = _parse_padskip(_PADSKIP, m_rep) if blk_cnt is not None else (m_rep,)
+     if len(pad_vs) > 1 and (_VM_MODE != 0 or (_DBG or dbg) or epi != 3 or deloop or not fpre):
+@@ -1048,7 +1185,8 @@ def stage2_fp8bs(out, a2, w2, a2_scale, w2_scale_flat, sorted_ids, sorted_expert
+         xcd_ord=_XCD_ORD, xcd_c=_XCD_C, bsoff=_BSOFF, fpre=fpre, wpe=(_WPE if fpre else 0), vm_mode=_VM_MODE,
+         e3_bl=_E3_BL, e3_perm=_E3_PERM, e3_saddr=_E3_SADDR, va_nv=_VA_NV, va_st=_VA_ST,
+         llvm_opts=tuple(sorted(_LLVM_OPTS.items())), bcm=_BCM, xcm=_XCM, b2ku=_B2_KU,
+-        padskip=pad_vs if len(pad_vs) > 1 else (),
++        padskip=pad_vs if len(pad_vs) > 1 else (), sstore=sst, sst_pol=(_SST_POL if sst else 0),
++        rs=_RS, rs_nv=_RS_NV,
+     )
+     cnt_arg = blk_cnt if len(pad_vs) > 1 else num_valid_ids  # unused dummy when the skip is off
+     if deloop:
+diff --git a/moe_ep.py b/moe_ep.py
+index adea9bf..5f0d56b 100644
+--- a/moe_ep.py
++++ b/moe_ep.py
+@@ -52,6 +52,10 @@ if _S2_IMPL == "s2":
+ # MOE_FAST_SORT=0 restores CK moe_sorting.
+ _FAST_SORT = os.environ.get("MOE_FAST_SORT", "1") == "1"
+ _ZF_SORT_BLOCKS = int(os.environ.get("MOE_ZF_SORT_BLOCKS", "304"))
++# Single-local-expert plain stores (r4_d1): with the fast sort + s2, tokens with exactly one local entry get bit 31 in
++# their sorted ids and their moe_buf rows are not zero-filled; s2 plain-stores those rows (exec-masked, branch-free)
++# and atomically adds only multi-local-expert rows. MOE_SSTORE=0 restores R3 (full fill, all-atomic epilogue).
++_SSTORE = os.environ.get("MOE_SSTORE", "1") == "1"
+ _msf = None
+ if _FAST_SORT:
+     try:
+@@ -118,11 +122,14 @@ def _forward_fbs(weights, x, x_scale, topk_weights, topk_ids, expert_mask, num_l
+     use_v2 = _s1v2 is not None and _S1V2_TILE_M % tile_m == 0
+     unit = _S1V2_TILE_M if use_v2 else tile_m
+     blk_cnt = None  # per-M-block valid-row counts (fast sort only) -> gemm1 + stage-2 all-padding subtile skips
++    sstore = False  # single-row plain stores (fast sort + s2 epi_mode 3 only; CK sort -> full fill, all atomics)
+     if (not use_v2 and _msf is not None and _msf.supported(topk_ids, topk_weights, expert_mask, num_local_tokens)
+             and _msf.available()):
++        sstore = _SSTORE and _s2 is not None and _s2.sstore_supported(inter, tile_m)
+         sid, sw, seid, nvalid, moe_buf, blk_cnt = _msf.moe_sorting_fast(
+             topk_ids, topk_weights, expert_mask.numel(), unit, expert_mask, num_local_tokens,
+             model_dim=model_dim, zero_fill=True, zfill_blocks=_ZF_SORT_BLOCKS, blk_counts=True,
++            single_flags=sstore,
+         )
+     else:
+         sid, sw, seid, nvalid, moe_buf = moe_sorting(
+@@ -152,7 +159,8 @@ def _forward_fbs(weights, x, x_scale, topk_weights, topk_ids, expert_mask, num_l
+            sid, seid, nvalid, blk_cnt if g1_ps else nvalid, rows, S, blocks, stream)
+     if _s2 is not None:
+         _s2.stage2_fp8bs(moe_buf, a2, weights["w2"].view(torch.uint8), a2s, weights["w2_scale_flat"], sid, seid,
+-                         sw, nvalid, rows, S, blocks, stream, topk=topk, tile_m=tile_m, blk_cnt=blk_cnt)
++                         sw, nvalid, rows, S, blocks, stream, topk=topk, tile_m=tile_m, blk_cnt=blk_cnt,
++                         sstore=sstore)
+         return moe_buf
+     s2 = _fbs.compile_stage2(model_dim=model_dim, inter_dim=inter, experts=E, topk=topk,
+                              tile_m=tile_m, tile_n=_FBS_TILE_N2)
+diff --git a/moe_sort_fast.py b/moe_sort_fast.py
+index 9e4cbe3..5142dd1 100644
+--- a/moe_sort_fast.py
++++ b/moe_sort_fast.py
+@@ -8,11 +8,16 @@ Output contract == CK moe_sorting (local-expert masking, local token count, skip
+   sorted_eids[m]  = local expert index of M block m
+   num_valid[0:2]  = [padded total, T]          (T = num_local_tokens[0])
+   moe_buf         = [M, model_dim]; rows [0, T) zeroed when zero_fill=True
++  single_flags=True (stage-2 single-local-expert plain stores):
++    sorted_ids[i] |= 0x80000000 for every entry of a token with exactly one local entry (local count 1);
++    moe_buf rows of those tokens are NOT zeroed (stage 2 plain-stores them; every other row in [0, T)
++    is still zeroed). The low 24 bits / slot bits are unchanged (gemm1 decodes with & 0xFFFFFF).
+ Entries past num_valid[0] are left unwritten (consumers never read them). Bit-identical to CK for
+ real routing (distinct experts per token; CK keeps a single copy of a repeated expert, this keeps
+ one entry per slot like the fused_moe reference).
+ 
+-k_count : one block per 256 tokens -> per-block local-expert histogram (LDS atomics).
++k_count : one block per 256 tokens -> per-block local-expert histogram (LDS atomics); with single flags also
++          the per-token "exactly one local entry" byte tsingle[t] (t < T) for the fill blocks.
+ k_place : per block, expert totals + this block's prefix from the histograms, padded expert bases,
+           wave-ballot ranks (deterministic token order), scatter; blocks also own the padding /
+           expert-id fill of experts le = b, b + grid, ...  Extra blocks past the sort grid zero the
+@@ -50,7 +55,8 @@ __device__ __forceinline__ int build_lid(int mval, int E, int* s_lid, int* s_tmp
+ 
+ template <int TOPK>
+ __global__ __launch_bounds__(256) void k_count(const int* __restrict__ ids, const int* __restrict__ mask,
+-                                               const int* __restrict__ nlt, int E, int* __restrict__ bcnt) {
++                                               const int* __restrict__ nlt, int E, int* __restrict__ bcnt,
++                                               unsigned char* __restrict__ tsingle) {
+     __shared__ int s_lid[MAXE];
+     __shared__ int s_tmp[8];
+     __shared__ int s_cnt[MAXE];
+@@ -74,12 +80,18 @@ __global__ __launch_bounds__(256) void k_count(const int* __restrict__ ids, cons
+     s_cnt[tid] = 0;
+     __syncthreads();
+     if (t < T) {
++        int nloc = 0;
+ #pragma unroll
+         for (int k = 0; k < TOPK; ++k) {
+             const int e = e8[k];
+             const int le = ((unsigned)e < (unsigned)E) ? s_lid[e] : -1;
+-            if (le >= 0) atomicAdd(&s_cnt[le], 1);
++            if (le >= 0) {
++                atomicAdd(&s_cnt[le], 1);
++                ++nloc;
++            }
+         }
++        // exactly one local entry: stage 2 plain-stores this token's row (no zero-fill, no atomics)
++        if (tsingle != nullptr) tsingle[t] = (unsigned char)(nloc == 1);
+     }
+     __syncthreads();
+     if (tid < nl) bcnt[b * MAXE + tid] = s_cnt[tid];
+@@ -92,7 +104,8 @@ __global__ __launch_bounds__(256) void k_place(const int* __restrict__ ids, cons
+                                                int* __restrict__ sorted_ids, float* __restrict__ sorted_w,
+                                                int* __restrict__ sorted_eid, int* __restrict__ num_valid,
+                                                int4* __restrict__ zbuf, int zrow16, int sort_grid,
+-                                               int* __restrict__ blk_cnt) {
++                                               int* __restrict__ blk_cnt, const unsigned char* __restrict__ tsingle,
++                                               int flag_single) {
+     __shared__ int s_lid[MAXE];
+     __shared__ int s_tmp[8];
+     __shared__ int s_tot[MAXE];
+@@ -104,10 +117,40 @@ __global__ __launch_bounds__(256) void k_place(const int* __restrict__ ids, cons
+     if ((int)blockIdx.x >= sort_grid) {
+         // zero-fill blocks: rows [0, T) of the stage-2 accumulation buffer, overlapping the
+         // latency-bound placement blocks (same idea as CK P23's fused moe_buf clear)
+-        const long total = (long)nlt[0] * zrow16;
+-        const long stride = (long)(gridDim.x - sort_grid) * TB;
+         const int4 z = make_int4(0, 0, 0, 0);
+-        for (long c = (long)(blockIdx.x - sort_grid) * TB + threadIdx.x; c < total; c += stride) zbuf[c] = z;
++        if (tsingle == nullptr) {
++            const long total = (long)nlt[0] * zrow16;
++            const long stride = (long)(gridDim.x - sort_grid) * TB;
++            for (long c = (long)(blockIdx.x - sort_grid) * TB + threadIdx.x; c < total; c += stride) zbuf[c] = z;
++            return;
++        }
++        // single flags: zero only rows whose token does NOT have exactly one local entry (stage 2 plain-stores
++        // the single rows). Block j owns rows [r0, r1); per group of 256 rows the rows to zero are compacted into
++        // LDS with wave ballots, then each wave zeroes whole rows (64 lanes x 16 B per store).
++        const int T = nlt[0];
++        const int nfill = (int)gridDim.x - sort_grid;
++        const int R = (T + nfill - 1) / nfill;
++        const int r0 = ((int)blockIdx.x - sort_grid) * R;
++        const int r1 = min(T, r0 + R);
++        const int tid = threadIdx.x, wave = tid >> 6, lane = tid & 63;
++        const unsigned long long lt = (1ull << lane) - 1ull;
++        for (int g0 = r0; g0 < r1; g0 += TB) {
++            const int r = g0 + tid;
++            const bool need = (r < r1) && (tsingle[r] == 0);
++            const unsigned long long bm = __ballot(need);
++            if (lane == 0) s_tmp[wave] = __popcll(bm);
++            __syncthreads();
++            int wb = 0;
++            for (int w = 0; w < wave; ++w) wb += s_tmp[w];
++            const int nneed = s_tmp[0] + s_tmp[1] + s_tmp[2] + s_tmp[3];
++            if (need) s_ptot[wb + __popcll(bm & lt)] = r;
++            __syncthreads();
++            for (int q = wave; q < nneed; q += 4) {
++                int4* row = zbuf + (long)s_ptot[q] * zrow16;
++                for (int c = lane; c < zrow16; c += 64) row[c] = z;
++            }
++            __syncthreads();
++        }
+         return;
+     }
+     const int b = blockIdx.x;
+@@ -212,6 +255,11 @@ __global__ __launch_bounds__(256) void k_place(const int* __restrict__ ids, cons
+         lek[k] = (valid && (unsigned)e < (unsigned)E) ? s_lid[e] : -1;
+         rk[k] = 0;
+     }
++    // exactly one local entry -> bit 31 of its sorted id (stage 2 plain-stores the row instead of an atomic add)
++    int nloc = 0;
++#pragma unroll
++    for (int k = 0; k < TOPK; ++k) nloc += (lek[k] >= 0) ? 1 : 0;
++    const int sflag = (flag_single && nloc == 1) ? (int)0x80000000u : 0;
+     const unsigned long long lt_mask = (1ull << lane) - 1ull;
+     for (int le = 0; le < nl; ++le) {
+         bool f = false;
+@@ -230,7 +278,7 @@ __global__ __launch_bounds__(256) void k_place(const int* __restrict__ ids, cons
+         if (le >= 0) {
+             int pos = s_base[le] + s_pre[le] + rk[k];
+             for (int w = 0; w < wave; ++w) pos += s_wcnt[w][le];
+-            sorted_ids[pos] = (k << 24) | t;
++            sorted_ids[pos] = ((k << 24) | t) | sflag;
+             sorted_w[pos] = wk[k];
+         }
+     }
+@@ -239,13 +287,14 @@ __global__ __launch_bounds__(256) void k_place(const int* __restrict__ ids, cons
+ void moe_sort_fast(torch::Tensor topk_ids, torch::Tensor topk_w, torch::Tensor mask, torch::Tensor nlt,
+                    int64_t unit, torch::Tensor bcnt, torch::Tensor sorted_ids, torch::Tensor sorted_w,
+                    torch::Tensor sorted_eid, torch::Tensor num_valid, torch::Tensor zbuf, int64_t zfill_blocks,
+-                   torch::Tensor blk_cnt, int64_t want_cnt) {
++                   torch::Tensor blk_cnt, int64_t want_cnt, torch::Tensor tsingle, int64_t want_single) {
+     const int M = topk_ids.size(0), topk = topk_ids.size(1), E = mask.numel();
+     TORCH_CHECK(topk == 8 && E <= MAXE, "moe_sort_fast: topk 8, <=256 experts");
+     const int grid = (M + TB - 1) / TB;
+     hipStream_t st = at::hip::getCurrentHIPStream();
++    unsigned char* ts = want_single ? tsingle.data_ptr<unsigned char>() : nullptr;
+     hipLaunchKernelGGL(k_count<8>, dim3(grid), dim3(TB), 0, st, topk_ids.data_ptr<int>(), mask.data_ptr<int>(),
+-                       nlt.data_ptr<int>(), E, bcnt.data_ptr<int>());
++                       nlt.data_ptr<int>(), E, bcnt.data_ptr<int>(), ts);
+     const int zrow16 = zfill_blocks > 0 ? (int)(zbuf.size(-1) * zbuf.element_size() / 16) : 0;
+     TORCH_CHECK(zfill_blocks == 0 || (zbuf.is_contiguous() && (zbuf.size(-1) * zbuf.element_size()) % 16 == 0),
+                 "moe_sort_fast: zero-fill buffer rows must be 16-B multiples");
+@@ -254,7 +303,8 @@ void moe_sort_fast(torch::Tensor topk_ids, torch::Tensor topk_w, torch::Tensor m
+                        bcnt.data_ptr<int>(), sorted_ids.data_ptr<int>(), sorted_w.data_ptr<float>(),
+                        sorted_eid.data_ptr<int>(), num_valid.data_ptr<int>(),
+                        zfill_blocks > 0 ? reinterpret_cast<int4*>(zbuf.data_ptr()) : nullptr, zrow16, grid,
+-                       want_cnt ? blk_cnt.data_ptr<int>() : nullptr);
++                       want_cnt ? blk_cnt.data_ptr<int>() : nullptr, zfill_blocks > 0 ? ts : nullptr,
++                       want_single ? 1 : 0);
+ }
+ """
+ _mod = None
+@@ -272,7 +322,7 @@ def _load():
+             name=f"moe_sort_fast_{tag}",
+             cpp_sources="void moe_sort_fast(torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, int64_t, "
+                         "torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, int64_t, "
+-                        "torch::Tensor, int64_t);",
++                        "torch::Tensor, int64_t, torch::Tensor, int64_t);",
+             cuda_sources=_SRC,
+             functions=["moe_sort_fast"],
+             extra_cuda_cflags=["-O3"],
+@@ -290,14 +340,17 @@ def available():
+ 
+ def moe_sorting_fast(topk_ids, topk_weights, num_experts, block_size, expert_mask, num_local_tokens,
+                      model_dim=0, moebuf_dtype=torch.bfloat16, zero_fill=False, zfill_blocks=304,
+-                     blk_counts=False):
++                     blk_counts=False, single_flags=False):
+     """Drop-in for aiter_fused_moe.moe_sorting (same buffers, same allocation order):
+     returns (sorted_ids, sorted_w, sorted_eids, num_valid, moe_buf [M, model_dim]).
+     zero_fill=True: rows [0, num_local_tokens) of moe_buf are zeroed by extra blocks of the placement
+     kernel (overlapping its latency-bound sort work, like CK P23's fused clear).
+     blk_counts=True: also returns a 6th tensor, int32 [len(sorted_eids)], parallel to sorted_eids:
+     blk_cnt[m] = number of valid (non-padding) rows of M block m (1..block_size; a block's padding is a
+-    suffix), written for m < num_valid[0] / block_size (later entries are unwritten)."""
++    suffix), written for m < num_valid[0] / block_size (later entries are unwritten).
++    single_flags=True: sorted ids of tokens with exactly one local entry carry bit 31 (0x80000000) and their
++    moe_buf rows are left unwritten by the zero fill -- the stage-2 kernel MUST plain-store them
++    (flydsl_moe_fp8bs_s2.stage2_fp8bs(sstore=1)); all other rows in [0, T) are zeroed as before."""
+     mod = _load()
+     dev = topk_ids.device
+     M, topk = topk_ids.shape
+@@ -312,9 +365,11 @@ def moe_sorting_fast(topk_ids, topk_weights, num_experts, block_size, expert_mas
+     bcnt = torch.empty(nblk * 256, dtype=torch.int32, device=dev)
+     zf = bool(zero_fill) and model_dim > 0
+     blk_cnt = torch.empty(max_blk, dtype=torch.int32, device=dev) if blk_counts else num_valid
++    tsingle = torch.empty(M, dtype=torch.uint8, device=dev) if single_flags else bcnt
+     mod.moe_sort_fast(topk_ids, topk_weights, expert_mask, num_local_tokens, int(block_size), bcnt,
+                       sorted_ids, sorted_w, sorted_eid, num_valid, moe_buf if zf else num_valid,
+-                      int(zfill_blocks) if zf else 0, blk_cnt, 1 if blk_counts else 0)
++                      int(zfill_blocks) if zf else 0, blk_cnt, 1 if blk_counts else 0, tsingle,
++                      1 if single_flags else 0)
+     if blk_counts:
+         return sorted_ids, sorted_w, sorted_eid, num_valid, moe_buf, blk_cnt
+     return sorted_ids, sorted_w, sorted_eid, num_valid, moe_buf

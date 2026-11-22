@@ -1,0 +1,469 @@
+{
+ "phase": "reprofile",
+ "round": 3,
+ "bottleneck": "compute",
+ "bottleneck_detail": "fp8 MFMA-bound at a 750 W power-capped clock: time tracks energy per forward, not cycles",
+ "profiler_used": "rocprofv3",
+ "profiler_note": "rocprof-compute failed its python dependency check (13 missing packages: plotext, textual, dash, ...), which no RPC_PROFILE_ARGS override can fix; degraded deliberately to rocprofv3 (COMMANDMENT PROFILE kernel-trace) + 8 rocprofv3 --pmc passes + an 8-arm l2 attribution pass + a 110-forward steady-state trace + amd-smi sustained power/clock (incl. a same-session R2-vs-R3 A/B on one GPU).",
+ "device": "AMD Instinct MI300X / gfx942 / CDNA3, 304 CU, wave64, 64KB LDS/CU, fp8=FNUZ, 750 W socket power cap (sustained 750 W; sclk ~1.0 GHz of 2.1 GHz max)",
+ "commit": "31c4cb1 (round 3 winner: integrated)",
+ "dispatch_count": 4,
+ "correctness": "PASS (tpr2048 rel_l2 2.315e-3, tpr4096 rel_l2 2.307e-3; identical to R2)",
+ "per_case_latency_ms": {
+  "tpr2048": 1.0603,
+  "tpr4096": 1.9207
+ },
+ "per_case_runs_ms": {
+  "tpr2048": [
+   1.0603,
+   1.0586,
+   1.061
+  ],
+  "tpr4096": [
+   1.9202,
+   1.9207,
+   1.9263
+  ]
+ },
+ "per_case_speedup": {
+  "tpr2048": 1.5795,
+  "tpr4096": 1.6731
+ },
+ "geomean_speedup_vs_baseline": 1.6256,
+ "vs_round2": {
+  "tpr2048_pct": -3.1,
+  "tpr4096_pct": -3.53,
+  "geomean_pct": 3.43,
+  "r2_ms": [
+   1.0942,
+   1.991
+  ],
+  "r2_geomean": 1.5717
+ },
+ "key_metrics": {
+  "valu_pct": 41.4,
+  "vmem_pct": 2.9,
+  "lds_pct": 31.5,
+  "hbm_gbps": 2068.0,
+  "l2_hit_pct": 76.5,
+  "vgpr": 256,
+  "scratch_bytes": 120,
+  "metric_scope": "valu/vmem/lds/hbm/l2/vgpr/scratch are for the leader kernel moe_fp8bs_gemm1_0, mean of the tpr2048/tpr4096 PMC medians (serialized PMC mode). hbm_gbps is TCC->EA fetch+write and includes MALL hits. scratch_bytes is the per-work-item private segment (35 spilled VGPRs; R2 had 0).",
+  "sclk_mhz_sustained_same_session": {
+   "r2": [
+    1077.5,
+    1069.0
+   ],
+   "r3": [
+    1009.5,
+    1001.0
+   ]
+  },
+  "socket_power_w_sustained": 750,
+  "sustained_ms_per_fwd_same_session": {
+   "r2": [
+    1.098,
+    2.0079
+   ],
+   "r3": [
+    1.0555,
+    1.9404
+   ]
+  },
+  "fwd_cycles_change_pct_same_session": [
+   -9.9,
+   -9.5
+  ],
+  "fwd_time_change_pct_same_session": [
+   -3.9,
+   -3.4
+  ],
+  "clock_change_pct_same_session": [
+   -6.3,
+   -6.4
+  ],
+  "steady_state_fwd_us": {
+   "tpr2048": {
+    "k_count": 7.3,
+    "k_place": 37.8,
+    "gemm1": 645.5,
+    "s2": 369.3,
+    "span": 1059.8
+   },
+   "tpr4096": {
+    "k_count": 7.3,
+    "k_place": 48.8,
+    "gemm1": 1199.9,
+    "s2": 674.9,
+    "span": 1931.3
+   }
+  },
+  "steady_state_fwd_us_r2": {
+   "tpr2048": {
+    "k_count": 6.9,
+    "k_place": 35.4,
+    "gemm1": 683.4,
+    "s2": 363.2,
+    "span": 1089.0
+   },
+   "tpr4096": {
+    "k_count": 6.8,
+    "k_place": 47.7,
+    "gemm1": 1267.3,
+    "s2": 650.7,
+    "span": 1974.1
+   }
+  },
+  "gemm1_pct_of_forward": [
+   60.9,
+   62.1
+  ],
+  "s2_pct_of_forward": [
+   34.8,
+   34.9
+  ],
+  "sort_pct_of_forward": [
+   4.3,
+   2.9
+  ],
+  "gemm1_pct_of_total": 30.76,
+  "s2_pct_of_total": 16.98,
+  "gemm1_steady_change_pct": [
+   -5.5,
+   -5.3
+  ],
+  "s2_steady_change_pct": [
+   1.7,
+   3.7
+  ],
+  "s2_power_carryover_pct_integrate_trace": [
+   4.6,
+   4.8
+  ],
+  "gemm1_mfma_busy_pct": [
+   65.1,
+   74.2
+  ],
+  "gemm1_mfma_busy_pct_r2": [
+   61.0,
+   65.7
+  ],
+  "s2_mfma_busy_pct": [
+   55.1,
+   65.7
+  ],
+  "gemm1_wave_frac_active_issuewait_depwait": [
+   [
+    0.284,
+    0.487,
+    0.225
+   ],
+   [
+    0.3,
+    0.494,
+    0.206
+   ]
+  ],
+  "gemm1_wave_frac_r2": [
+   [
+    0.233,
+    0.561,
+    0.204
+   ],
+   [
+    0.236,
+    0.574,
+    0.191
+   ]
+  ],
+  "s2_wave_frac_active_issuewait_depwait": [
+   [
+    0.254,
+    0.504,
+    0.21
+   ],
+   [
+    0.289,
+    0.53,
+    0.183
+   ]
+  ],
+  "mean_waves_per_simd_gemm1_s2": [
+   [
+    1.75,
+    1.86
+   ],
+   [
+    1.76,
+    1.83
+   ]
+  ],
+  "occupancy_cap_waves_per_simd": 2,
+  "gemm1_useful_f8_tflops_steady": [
+   853,
+   910
+  ],
+  "gemm1_useful_f8_tflops_steady_r2": [
+   806,
+   862
+  ],
+  "s2_useful_f8_tflops_steady": [
+   746,
+   809
+  ],
+  "gemm1_mfma_insts_change_pct": [
+   -3.49,
+   -1.9
+  ],
+  "s2_mfma_insts_change_pct": [
+   -3.49,
+   -1.9
+  ],
+  "mfma_rows_noskip_vs_421": {
+   "tpr2048": [
+    17408,
+    16800
+   ],
+   "tpr4096": [
+    33600,
+    32960
+   ]
+  },
+  "residual_padding_pct_of_mfma_rows_after_skip": [
+   2.29,
+   1.29
+  ],
+  "extra_saving_of_3subtile_variant_pct": [
+   0.76,
+   0.39
+  ],
+  "gemm1_nonmfma_valu_per_mfma": 1.27,
+  "gemm1_fma_f32_per_mfma": 1.0,
+  "gemm1_trans_per_mfma": 0.033,
+  "gemm1_mul_per_mfma": 0.069,
+  "gemm1_isa_full_body": {
+   "mfma": 2048,
+   "v_fma_scalar": 2048,
+   "v_pk_fma_f32": 0,
+   "s_nop": 375,
+   "s_waitcnt": 362,
+   "vmem_ld": 302,
+   "ds_read": 328
+  },
+  "s2_isa_full_body": {
+   "mfma": 1024,
+   "v_fma_scalar": 668,
+   "v_pk_fma_f32": 178,
+   "unchanged_vs_r2_opcode_similarity": 0.992
+  },
+  "s2_isa_reduced_bodies_pk_fma_per_mfma": {
+   "1_subtile": "123/256",
+   "2_subtile": "156/512"
+  },
+  "gemm1_isa": {
+   "vgpr": 256,
+   "vgpr_spill": 35,
+   "scratch_bytes_per_lane": 120,
+   "lds_bytes": 32768,
+   "code_kb": 71.1,
+   "code_kb_r2": 40.1,
+   "spills_only_in": "1-/2-subtile pad-skip paths (full body spill-free)"
+  },
+  "s2_isa": {
+   "vgpr": 246,
+   "vgpr_spill": 0,
+   "lds_bytes": 32768,
+   "code_kb": 45.3,
+   "code_kb_r2": 24.4
+  },
+  "icache_hit_pct_gemm1_s2": [
+   [
+    99.93,
+    99.96
+   ],
+   [
+    99.91,
+    99.95
+   ]
+  ],
+  "gemm1_l2_hit_pct": [
+   73.4,
+   79.6
+  ],
+  "gemm1_l2_hit_pct_r2": [
+   77.0,
+   81.1
+  ],
+  "gemm1_ea_fetch_mb": [
+   1502,
+   2214
+  ],
+  "gemm1_ea_fetch_mb_r2": [
+   1290,
+   2041
+  ],
+  "gemm1_ea_write_mb": [
+   42.4,
+   76.9
+  ],
+  "gemm1_ea_write_mb_r2": [
+   36.8,
+   71.0
+  ],
+  "s2_ea_fetch_write_mb": [
+   [
+    598,
+    139
+   ],
+   [
+    850,
+    271
+   ]
+  ],
+  "k_place_zero_fill_write_mb_gbps": [
+   [
+    89,
+    3230
+   ],
+   [
+    177,
+    4183
+   ]
+  ],
+  "gemm1_l2_miss_attribution_M": {
+   "r2_canon": [
+    10.37,
+    16.49
+   ],
+   "r3_default": [
+    12.11,
+    17.83
+   ],
+   "r3_FBS_PADSKIP=0": [
+    10.43,
+    16.62
+   ],
+   "r3_FBS_PADSKIP=4,1": [
+    11.6,
+    17.51
+   ],
+   "r3_FBS_PADSKIP=4,2": [
+    12.72,
+    19.5
+   ],
+   "r3_FBS_G1_PRIO=0": [
+    12.45,
+    18.0
+   ],
+   "r3_FBS_RS=0": [
+    11.84,
+    17.11
+   ],
+   "r3_FBS_WPE=0": [
+    10.78,
+    16.87
+   ]
+  },
+  "gemm1_padskip_expected_vs_delivered_fwd_pct": {
+   "expected_at_1to1": [
+    -2.1,
+    -1.2
+   ],
+   "delivered_paired_ab": [
+    -0.23,
+    -0.42,
+    -0.33,
+    -0.39
+   ]
+  },
+  "lds_bank_conflict_pct_gemm1_s2": [
+   12.9,
+   0.0
+  ],
+  "ctas_vs_cu": "gemm1 launches 69632 CTAs (4352/8400 non-empty) and s2 8704 CTAs, against 608 resident slots (304 CU x 2) -> the GPU is filled.",
+  "counters_note": "SQ_INSTS_VALU includes MFMA; SQ_INSTS_VALU_FMA_F32 counts scalar and packed FMA as one instruction each. PMC-mode per-dispatch clocks vary 0.79-1.35 GHz, so per-kernel cycle deltas under ~5% are not resolvable from PMC; instruction counts, L2 request/miss counts and MFMA busy are stable."
+ },
+ "top_kernels": [
+  {
+   "name": "moe_fp8bs_gemm1_0 (stage1 gate/up fp8 blockscale MFMA GEMM + SiLU + fp8 quant; R3: scalar v_fmac rescale, waves_per_eu=2, K-loop setprio, maxnum epilogue, 4/2/1 pad-skip)",
+   "pct_of_total": 30.76,
+   "pct_of_forward": [
+    60.9,
+    62.1
+   ],
+   "steady_us": [
+    645.5,
+    1199.9
+   ],
+   "mfma_busy_pct": [
+    65.1,
+    74.2
+   ],
+   "combined_vgpr": 256,
+   "scratch_bytes": 120,
+   "lds_kb": 32,
+   "waves_per_simd": 2
+  },
+  {
+   "name": "moe_s2_fp8bs_0 (stage2 down fp8 blockscale MFMA GEMM + bf16 atomic scatter; R3: 4/2/1 pad-skip; full body unchanged, still 178 v_pk_fma_f32)",
+   "pct_of_total": 16.98,
+   "pct_of_forward": [
+    34.8,
+    34.9
+   ],
+   "steady_us": [
+    369.3,
+    674.9
+   ],
+   "mfma_busy_pct": [
+    55.1,
+    65.7
+   ],
+   "combined_vgpr": 248,
+   "lds_kb": 32,
+   "waves_per_simd": 2
+  },
+  {
+   "name": "k_place<8> (fast-sort placement + moe_buf zero-fill + new blk_cnt; HBM-write-bound)",
+   "pct_of_total": 1.15,
+   "pct_of_forward": [
+    3.6,
+    2.5
+   ],
+   "steady_us": [
+    37.8,
+    48.8
+   ]
+  },
+  {
+   "name": "k_count<8> (fast-sort histogram)",
+   "pct_of_total": 0.22,
+   "pct_of_forward": [
+    0.7,
+    0.4
+   ],
+   "steady_us": [
+    7.3,
+    7.3
+   ]
+  },
+  {
+   "name": "input-gen/reference elementwise kernels (NOT in the timed forward)",
+   "pct_of_total": 50.9
+  }
+ ],
+ "summary_path": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/round_3_shift_analysis.md",
+ "artifacts": {
+  "commandment_profile": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/profile_output_r3/profile_report.txt",
+  "pmc_root": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/profile_output_r3_pmc",
+  "pmc_summary": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/profile_output_r3_pmc/pmc_summary.json",
+  "l2_attribution": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/profile_output_r3_pmc/l2_attrib/summary.txt",
+  "steady_trace": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/profile_output_r3_pmc/long_trace",
+  "power_ab": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/profile_output_r3_pmc/power_ab.log",
+  "sustained_power": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/profile_output_r3_pmc/sustained_power.log",
+  "bench": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/profile_output_r3_pmc/bench.log",
+  "routing": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/profile_output_r3_pmc/routing_stats.log",
+  "isa": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/profile_output_r3_pmc/isa",
+  "tools": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/profile_output_r3_pmc/tools"
+ }
+}

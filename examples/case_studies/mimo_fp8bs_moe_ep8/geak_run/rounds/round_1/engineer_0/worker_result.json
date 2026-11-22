@@ -1,0 +1,29 @@
+{
+  "engineer_id": "r1_d0",
+  "specialty": "memory",
+  "task": "Engage the 128-token transposed stage1 (s1v2) and beat gemm1 end to end",
+  "strategy": "Repaired the s1v2 SyntaxError. Added a device grid-stride loop over num_valid_ids[0] and a host M-slot bound (36,864 -> 4,608 CTAs). Added XCD tiling xcd_swz=3/xcd_gn=4 (L2 misses -21%). Set sched=0, halfskip=0. Added an eid_out side output that removes the repeat_interleave dispatch. Added a pair64 option (unit-64 sorting). Tuned s1v2 ties gemm1 in stage1 but loses end to end (0.981x / 0.992x), so MOE_S1_IMPL now defaults to gemm1 (the measured winner) and v2 stays env-gated. The default path is code-identical to the current best: NEUTRAL.",
+  "speedup_geomean": 1.5337,
+  "speedup_arithmetic": 1.5342,
+  "speedup_weighted": 1.5332,
+  "per_case": [
+    {"name": "tpr2048", "baseline_ms": 1.6747, "optimized_ms": 1.1208, "speedup": 1.4942, "weight": 1.0, "weight_source": "unweighted (COMMANDMENT METRIC = geomean)"},
+    {"name": "tpr4096", "baseline_ms": 3.2135, "optimized_ms": 2.0413, "speedup": 1.5742, "weight": 1.0, "weight_source": "unweighted (COMMANDMENT METRIC = geomean)"}
+  ],
+  "status": "partial",
+  "measurement_valid": true,
+  "patch_file": "best_patch.diff",
+  "strategies_tried": [
+    "P2-MEM: repair the s1v2 SyntaxError; engagement proven in the trace (moe_fp8bs_s1t_0, 256 VGPR, 32 KB LDS)",
+    "P4-LAUNCH: bounded M-slots + device grid-stride loop over num_valid_ids[0] (36,864 -> 4,608 CTAs)",
+    "P2-MEM: XCD mapping study: xcd_swz=1 (47% L2 hit, worst), xcd_swz=0 (69%), xcd_swz=2 M-partition (more misses), xcd_swz=3/xcd_gn=4 tiling (-21% L2 misses, about -2% stage1)",
+    "P5-TUNE: sched=0 better than sched=10 (3-5%); halfskip=0 better than 1/2; wpe=2 (wpe=0 is -20%); setprio/a_stream/sw_sgpr/post_defer are noise; rescale=1 and roll=0 are worse",
+    "P1-REUSE: tile_m=64 s1v2 is -9% vs gemm1; rsplit=1 is broken (indexes m_repeat rows)",
+    "P2-MEM: what-ifs: weights always L2-hit -11%/-6.5%, X always hit -8%, both -18%/-14% with sclk +18% (L2-miss traffic is the limiter)",
+    "P0-ALG: pair64 (unit-64 sort, 128-row pair tiles, two 64-row passes on straddles): correct but +30% L2 misses, slower",
+    "P2-MEM: halfskip partial tiles desync the CTAs sharing a weight panel: +17% L2 misses",
+    "P3-COMP: explicit packed rescale multiply: no change",
+    "host: eid_out side output removes the repeat_interleave dispatch (about 1-3 us GPU in the forward)"
+  ],
+  "notes": "NEGATIVE RESULT for s1v2 with engagement proof. COMMANDMENT, 5 interleaved rounds, medians: default (gemm1) 1.1208/2.0413 ms = 1.534x geomean, same code path as the 1.528x bar, so the delta is noise. MOE_S1_IMPL=v2 tuned: 1.1430/2.0570 ms = 0.981x/0.992x of gemm1. Stage1 alone: v2 693-696 vs gemm1 686-691 us (tpr2048); v2 1240-1247 vs gemm1 1245-1262 us (tpr4096). As found (paren fix only), v2 was 777/1401 us (0.89x), with a 1-D grid of 36,864 CTAs, scratch 28 B and xcd_swz=1 (47% L2 hit). Side costs of unit-128 sorting: stage2 +14.6 us per case; the repeat dispatch was removed. LIMITER: under the 750 W cap, L2-miss (MALL/HBM) traffic sets the clock. Making B and X always hit gives -18% stage1 time and sclk 1160 -> 1370 MHz at the same power, with only -3% cycles. The 128-row tile halves L2 requests per FLOP (36.6M vs 45M) but doubles each XCD's concurrent working set, so the L2 hit rate drops (69% vs 77%) and the misses (11.5M) exceed gemm1's (10.4M). The 256-VGPR budget (128 accumulators) caps weight prefetch at one K=64 stage. Any mixed tile durations (halfskip, pair64) desync the CTAs sharing a weight panel and add misses. Default flipped to gemm1 on purpose: with the paren fixed, the old default 'v2' would silently engage an untuned s1v2 at 0.91x."
+}

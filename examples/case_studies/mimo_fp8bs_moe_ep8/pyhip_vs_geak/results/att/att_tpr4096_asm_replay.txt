@@ -1,0 +1,21 @@
+
+_ZN5aiter50fmoe_bf16_blockscaleFp8_g1u1_vs_silu_1tg_ps_32x25 dispatch 770: 16 traced waves, 3450k cycles and 84096 MFMAs per wave, wave MFMA 39.0%
+  loop 0x39c0-0x4c40 (256 MFMA/iter)       share  24.8%     50.1k cycles x 17.1 per wave  MFMA  65.5%
+  loop 0x5808-0x6c68 (128 MFMA/iter)       share  30.9%     62.2k cycles x 17.1 per wave  MFMA  26.4%
+  loop 0x6c78-0x7ef8 (256 MFMA/iter)       share  14.5%     48.9k cycles x 10.2 per wave  MFMA  67.0%
+  loop 0x8ac0-0x9f20 (128 MFMA/iter)       share  19.1%     64.3k cycles x 10.2 per wave  MFMA  25.5%
+  outside the MFMA loops                   share  10.7%      6.6k cycles x 55.8 per wave  MFMA   0.0%
+
+_ZN5aiter50fmoe_bf16_blockscaleFp8_g1u1_vs_silu_1tg_ps_32x25 dispatch 776: 16 traced waves, 3748k cycles and 84288 MFMAs per wave, wave MFMA 36.0%
+  loop 0x39c0-0x4c40 (256 MFMA/iter)       share  15.5%     48.3k cycles x 12.0 per wave  MFMA  67.8%
+  loop 0x5808-0x6c68 (128 MFMA/iter)       share  23.2%     72.5k cycles x 12.0 per wave  MFMA  22.6%
+  loop 0x6c78-0x7ef8 (256 MFMA/iter)       share  19.6%     47.5k cycles x 15.4 per wave  MFMA  68.9%
+  loop 0x8ac0-0x9f20 (128 MFMA/iter)       share  30.2%     73.2k cycles x 15.4 per wave  MFMA  22.4%
+  outside the MFMA loops                   share  11.6%      7.8k cycles x 55.9 per wave  MFMA   0.0%
+
+_ZN5aiter50fmoe_bf16_blockscaleFp8_g1u1_vs_silu_1tg_ps_32x25 dispatch 782: 16 traced waves, 3679k cycles and 83520 MFMAs per wave, wave MFMA 36.3%
+  loop 0x39c0-0x4c40 (256 MFMA/iter)       share  25.8%     50.6k cycles x 18.8 per wave  MFMA  64.7%
+  loop 0x5808-0x6c68 (128 MFMA/iter)       share  35.4%     69.5k cycles x 18.8 per wave  MFMA  23.6%
+  loop 0x6c78-0x7ef8 (256 MFMA/iter)       share  11.2%     48.8k cycles x  8.4 per wave  MFMA  67.2%
+  loop 0x8ac0-0x9f20 (128 MFMA/iter)       share  16.1%     70.4k cycles x  8.4 per wave  MFMA  23.3%
+  outside the MFMA loops                   share  11.5%      7.6k cycles x 55.4 per wave  MFMA   0.0%

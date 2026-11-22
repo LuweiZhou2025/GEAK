@@ -1,0 +1,38 @@
+{
+  "phase": "reprofile",
+  "round": 0,
+  "bottleneck": "compute",
+  "profiler_used": "rocprofv3",
+  "device": "AMD Instinct MI300X / gfx942 / CDNA3, 304 CU, wave64, 64KB LDS/CU, fp8=FNUZ",
+  "dispatch_count": 6,
+  "per_case_latency_ms": {"tpr2048": 1.1206, "tpr4096": 2.0562},
+  "geomean_speedup_vs_baseline": 1.528,
+  "key_metrics": {
+    "valu_pct": 0, "vmem_pct": 0, "lds_pct": 0, "hbm_gbps": 0, "l2_hit_pct": 0,
+    "stage1_gemm1_vgpr": 112, "stage1_gemm1_accum_vgpr": 128, "stage1_gemm1_combined_vgpr": 240,
+    "stage1_gemm1_sgpr": 112, "stage1_gemm1_lds_bytes_per_wg": 32768, "stage1_gemm1_scratch": 0,
+    "stage1_gemm1_waves_per_simd": 2, "stage1_gemm1_wg_threads": 256, "stage1_gemm1_ctas": 69632,
+    "stage2_s2_vgpr": 128, "stage2_s2_accum_vgpr": 128, "stage2_s2_combined_vgpr": 256,
+    "stage2_s2_sgpr": 112, "stage2_s2_lds_bytes_per_wg": 28672, "stage2_s2_scratch": 0,
+    "stage2_s2_waves_per_simd": 2, "stage2_s2_wg_threads": 256, "stage2_s2_ctas": 8704,
+    "gemm1_pct_of_total": 31.60, "s2_pct_of_total": 17.82, "gemm_stages_pct_of_total": 49.42,
+    "ctas_vs_cu": "gemm1 69632 CTAs / s2 8704 CTAs vs 304 CU = massively oversubscribed, GPU filled",
+    "counters_note": "SoL VALU/VMEM/MFMA/HBM/L2 unavailable: rocprof-compute degraded to rocprofv3 kernel-trace+stats (missing python TUI deps, same as baseline). Classified from kernel dominance + register/LDS/grid footprint of the two FlyDSL MFMA GEMMs. Activation-quant kernels (Abs/ReduceMax/Div/clamp/float8_copy/Mul, 68-72 calls each) are input-generation/reference, NOT in the FBS timed forward (moe_ep._forward_fbs launches only moe_sorting + stage1 + stage2)."
+  },
+  "top_kernels": [
+    {"name": "moe_fp8bs_gemm1_0 (FlyDSL stage1 gate/up fp8 blockscale MFMA GEMM + fused SiLU + fp8 quant of intermediate)", "pct_of_total": 31.60, "calls": 12, "avg_ns": 1054741},
+    {"name": "moe_s2_fp8bs_0 (FlyDSL stage2 down fp8 blockscale MFMA GEMM + topk-weighted scatter/atomic)", "pct_of_total": 17.82, "calls": 12, "avg_ns": 594746},
+    {"name": "elementwise DivFunctor (act fp8 quant, INPUT-GEN not forward)", "pct_of_total": 8.21},
+    {"name": "AbsFunctor (act quant amax, INPUT-GEN not forward)", "pct_of_total": 6.86},
+    {"name": "MulFunctor (act quant scale, INPUT-GEN not forward)", "pct_of_total": 6.02},
+    {"name": "ck_tile MoeSortingMultiPhase P23/P1/P0 + ClearWorkspace (per-forward routing)", "pct_of_total": 3.8}
+  ],
+  "top_opportunities": [
+    "Stage1 gemm1 is the leader (31.60%, ~2x stage2). It now runs at 2 waves/SIMD (combined VGPR 240 = 112 arch + 128 accum; 32KB LDS/WG). The binding limiter for a 3rd wave is now LDS, not just VGPR: 32KB/WG pins it to 2 WG/CU (64KB/CU). To reach 3 waves/SIMD (33% occupancy) BOTH must drop: LDS to <=21KB/WG AND combined VGPR to <=170. VGPR trim alone no longer helps while LDS stays at 32KB.",
+    "Stage2 s2 (17.82%) sits exactly at combined VGPR 256 = the 2-wave boundary (512/256=2) with 28KB LDS. Cutting VGPR a little gains nothing; it needs <=170 combined VGPR AND <=21KB LDS together to unlock a 3rd wave. No scratch spill on either stage (good).",
+    "GPU fill is NOT the lever: gemm1 launches 69632 CTAs and s2 8704 CTAs vs 304 CU (massively oversubscribed). This is pure per-wave occupancy / MFMA-issue latency hiding (latency sub-case C2: too few resident waves), not a grid/split-K problem.",
+    "Consider fusing stage1->stage2 to avoid the a2 (fp8 intermediate) + a2s round-trip through HBM between the two kernels; stage1 already fuses SiLU and the intermediate fp8 block-scale quant, so the remaining inter-stage cost is the a2/a2s materialization. Secondary vs the occupancy lever."
+  ],
+  "summary_path": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/round_0_shift_analysis.md",
+  "shift_note": "BASELINE (aiter asm fmoe, 1 wave/SIMD, 512 combined VGPR + 64KB LDS, 1.85/3.29ms) -> WARM-START ADOPTED (FlyDSL 2-stage, 2 waves/SIMD, gemm1 240 VGPR+32KB LDS / s2 256 VGPR+28KB LDS, 1.12/2.06ms = 1.528x). The aiter asm kernel is fully replaced by moe_fp8bs_gemm1_0 + moe_s2_fp8bs_0. Still COMPUTE-bound (dense fp8 MFMA grouped GEMM dominates, 49.42% of device time between the two stages) but no longer register/LDS-starved to 1 wave/SIMD. NEXT: push 2->3 waves/SIMD on gemm1 by cutting BOTH LDS (<=21KB) and combined VGPR (<=170); LDS is now the co-limiter, so VGPR trim alone is insufficient."
+}

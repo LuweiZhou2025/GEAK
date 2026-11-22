@@ -1,0 +1,11 @@
+{
+  "test_cases": [
+    {"name": "tpr2048", "latency_ms": 1.6747, "params": "tokens_per_rank=2048, recv_rows=32768, valid=10841"},
+    {"name": "tpr4096", "latency_ms": 3.2135, "params": "tokens_per_rank=4096, recv_rows=32768, valid=21575"}
+  ],
+  "geomean_ms": 2.3198,
+  "workload_aligned": false,
+  "num_test_cases": 2,
+  "reliable": true,
+  "runs_ms": [[1.6790, 3.2031], [1.6717, 3.2178], [1.6733, 3.2196]]
+}

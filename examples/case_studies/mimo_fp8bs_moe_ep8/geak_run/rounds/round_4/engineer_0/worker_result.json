@@ -1,0 +1,38 @@
+{
+ "engineer_id": "r4_d0",
+ "specialty": "compute",
+ "task": "r4_d0: s2 packed-FP32 purge (port gemm1's _fma_sc scalar rescale to s2), then trim s2 K-loop/prologue VALU; outputs bit-identical",
+ "strategy": "S2_RS=1 (default ON): per-element scalar llvm.fma rescale (_fma_sc4) at both rescale sites of the full and pad-skip bodies, explicit lru-key knob, VALU sched slots 2 scalar FMA per MFMA slot (S2_RS_NV=2, same slot layout as the old 1 v_pk_fma per slot)",
+ "speedup_geomean": 1.6269,
+ "speedup_arithmetic": 1.6274,
+ "speedup_weighted": 1.6263,
+ "per_case": [
+  {
+   "name": "tpr2048",
+   "baseline_ms": 1.6747,
+   "optimized_ms": 1.057,
+   "speedup": 1.5844,
+   "weight": 1.0,
+   "weight_source": "unweighted geomean (COMMANDMENT METRIC); optimized = median of 12 interleaved COMMANDMENT rounds on GPU2 (same-session canonical 1.0583 ms)"
+  },
+  {
+   "name": "tpr4096",
+   "baseline_ms": 3.2135,
+   "optimized_ms": 1.9237,
+   "speedup": 1.6705,
+   "weight": 1.0,
+   "weight_source": "unweighted geomean (COMMANDMENT METRIC); optimized = median of 12 interleaved COMMANDMENT rounds on GPU2 (same-session canonical 1.9253 ms)"
+  }
+ ],
+ "status": "partial",
+ "measurement_valid": true,
+ "patch_file": "best_patch.diff",
+ "strategies_tried": [
+  "P3-COMP: S2_RS=1 scalar per-element FMA rescale in full + 2-/1-subtile bodies (shipped): s2 -1.3..-2.1%, forward +0.05..+0.35% (clock carry-over into gemm1)",
+  "P3-COMP: S2_RS_NV=1 (1 scalar FMA per MFMA slot instead of 2): isolated s2 -1.15%/-1.03% vs -1.59%/-1.16% for NV=2 -> kept 2",
+  "P3-COMP: S2_PRO_SC fenced scalar fpre-prologue multiplies (llvm.arithmetic.fence defeats SLP re-packing): 0 V_PK_*_F32 in the kernel, measured neutral -> NOT_A_CANDIDATE",
+  "P2/P3: S2_BIMM B-load immediate-offset addressing (no SGPR): -92 VALU/tile, VGPR 250, isolated s2 noise -> NOT_A_CANDIDATE",
+  "priced only: kt=0 fma(x,s,0)->v_mul (encoding only), LDS scale-read merging (byte count fixed by the MFMA row layout), first-kb fold of the routing weight (already folded in the fpre table)"
+ ],
+ "notes": "SHIPPED (best_patch.diff vs 31c4cb1, flydsl_moe_fp8bs_s2.py only): S2_RS=1 default-ON = the s2 block-scale rescale emitted as 4 scalar llvm.fma per f32x4 (element i x scale element i), in the in-loop and post-loop rescale of the full body and both pad-skip bodies; rs/rs_nv passed EXPLICITLY into the lru-cached compile_stage2_fp8bs (separate binaries per A/B arm); S2_RS=0 restores the R3 ISA byte-identically. ISA (census.py/isa_cmp.py/seq_cmp.py, isa/census_before_after.txt): whole-kernel v_pk_fma_f32 457->0 (full body 178->0, 2-subtile 156->0, 1-subtile 123->0), scalar FMA 878->1792 (full body 960 v_fmac_f32_e32 + 64 v_fma_f32), VGPR 246->238, 0 spills, 32 KB LDS, 2 waves/SIMD, s_waitcnt 218->124, s_nop 102->78; MFMA/ds_read/ds_write/buffer_load/barrier order unchanged through the K loop (only the last K tile's epilogue-id preloads move a few slots). BIT-IDENTICAL: tools/det_check.py remaps every valid sorted row to its own output row (one atomic per row) -> torch.equal vs the CANONICAL s2 module on identical a2/a2s, both cases x 2 seeds; forward moe_buf rows with <=2 local experts exact; COMMANDMENT correctness rel_l2 2.315e-3/2.307e-3 unchanged; ext_correct 24/24; MOE_FAST_SORT=0, S2_PADSKIP=0, S2_FPRE=0 paths PASS. PERF: isolated s2 -1.3%..-1.6% (11/11, 9/9 wins; null +-0.2%); per-kernel trace s2 -1.58%/-1.90% (target -2% met on tpr4096) BUT the next forward's gemm1 +0.34%/+0.99% (clock carry-over) -> kernel sum -0.21%/-0.02%; sustained-power test: forward -0.4%/-0.5% with the 750 W-capped sclk 0.5-0.8% lower. COMMANDMENT interleaved A/B vs canonical copy: GPU2 12 rounds +0.00%/+0.28% (6/12, 7/12), GPU2 6 rounds +0.11%/+0.11%, GPU3 8 rounds +0.04%/+0.70% (4/8, 8/8) -> pooled ~+0.05% tpr2048 / ~+0.35% tpr4096 (~+0.2% geo); in-process forward +0.57%/+0.43% (8/11, 9/11). Never a regression, but well below the +0.7% target: the pk->scalar swap removes stall cycles, not energy, and s2 is the second kernel of the loop, so the denser s2 hands a lower clock to the next gemm1. NOT SHIPPED: (1) S2_PRO_SC (prologue_pksc_NOT_A_CANDIDATE.diff): plain scalar fmuls feeding the fpre vector store are re-packed into v_pk_mul_f32 by LLVM's SLP vectorizer; wrapping each product in llvm.arithmetic.fence keeps them v_mul_f32 (whole kernel 0 V_PK_*_F32), but measured neutral (isolated -0.11%/+0.22%, head-to-head COMMANDMENT ~0/+0.1-0.3%). (2) S2_BIMM (b_imm_offset_NOT_A_CANDIDATE.diff, step 3): after RS the only non-FMA K-loop VALU is 120 B-address v_or_b32/tile; per-ni i32 bases + MUBUF 12-bit immediate offsets remove 92 VALU/tile (v_or 120->0) but VGPR 238->250 and isolated s2 +0.04%/-0.12% = noise (as R2's soffset variant). The 1024 FMAs/tile (1 per MFMA) are irreducible bit-exactly, so s2's scale-math lane is exhausted; remaining s2 energy levers are bytes (W2/L2 panel traffic, epilogue fill/atomics = r4_d1's plain-store direction). Measurement hygiene: an early harness was aborted because the workspace was edited while it re-imported the module (FlyDSL traces source at first call); all verdicts come from frozen snapshot copies (snap1/snap2/snap3)."
+}

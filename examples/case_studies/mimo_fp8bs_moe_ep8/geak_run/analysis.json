@@ -1,0 +1,25 @@
+{
+  "kernel_type": "e2e",
+  "kernel_file": "moe_ep.py",
+  "entry_point": "forward",
+  "modifiable_files": ["moe_ep.py", "aiter_fused_moe.py", "flydsl_moe_fp8bs_s1v2.py", "<new files in task dir>"],
+  "bottleneck_guess": "compute",
+  "warm_start": true,
+  "current_best_bar": 1.5397,
+  "baseline_geomean_ms": {"tpr2048": 1.6807, "tpr4096": 3.2239},
+  "current_best_ms": {"tpr2048": 1.1178, "tpr4096": 2.0447},
+  "op": "rank-local routed-expert fused MoE (MiMo-V2.6-Flash-MOPD, EP8), W8A8 fp8 block-scale (128x128 weights, 1x128 activations), SiLU gate/up, bf16 out",
+  "shapes": {"hidden": 4096, "moe_intermediate": 2048, "experts_total": 256, "experts_local": 32, "topk": 8, "recv_buffer_rows": 32768, "cases_tokens_per_rank": [2048, 4096]},
+  "kk_operator": "fused_moe_grouped_gemm",
+  "kk_language": "flydsl",
+  "kk_refs": [
+    "operators/fused_moe_grouped_gemm/backends/flydsl.md",
+    "operators/fused_moe_grouped_gemm/tuning.md",
+    "operators/fused_moe_grouped_gemm/numerics.md",
+    "languages/flydsl/authoring_gemm_levers.md",
+    "languages/flydsl/authoring_tile_programming.md",
+    "languages/flydsl/debugging.md"
+  ],
+  "ceiling": "750W power cap throttles sclk ~1.2GHz -> ~19-20% of 2615T nameplate realizable; HBM <20% (NOT memory bound). Realistic FlyDSL roofline ~45-60% peak = ~0.6-0.7 ms tpr2048 / ~1.2-1.4 ms tpr4096. Lever is MFMA issue efficiency + occupancy (2 waves/SIMD @ ~240 VGPR; 3rd wave needs <=170 VGPR).",
+  "highest_value_lever": "Repair SyntaxError at flydsl_moe_fp8bs_s1v2.py:159 (missing closing paren of int(os.environ.get('FBS_XCD_N','8')) ) so the real transposed 128-row 'T' stage1 (weights as MFMA src-A, tokens as src-B, one token/lane -> activation block-scale is a per-lane scalar; halves B stream per FLOP vs 64-row gemm1 tile) actually imports and executes instead of silently falling back to the 64-row gemm1 tile. Then A/B s1v2 128-row + XCD swizzle vs gemm1 fallback per case."
+}

@@ -1,0 +1,28 @@
+{
+  "engineer_id": "r1_d2",
+  "specialty": "compute",
+  "task": "Stage2 (moe_s2_fp8bs_0) to 3 co-resident WGs/CU to hide its short-K per-CTA overhead",
+  "strategy": "Implemented the full 3-WG/CU route as env-gated v3: running-accumulator rescale fold, ku-outer half-step B pipeline, 2-stage A ring at 21504 B LDS, waves_per_eu=3. 3 WG/CU was reached at 168 VGPR but measured slower because s2 is pinned at the 750 W cap (~1.1 GHz). Shipped instead an 8-line main-loop wave priority change (s_setprio 1 in the K loop, 0 in prologue/epilogue; S2_PRIO default 1, S2_PRIO=0 is ISA-identical to the canonical kernel).",
+  "speedup_geomean": 1.5459,
+  "speedup_arithmetic": 1.5466,
+  "speedup_weighted": 1.5453,
+  "per_case": [
+    {"name": "tpr2048", "baseline_ms": 1.6747, "optimized_ms": 1.11455, "speedup": 1.5026, "weight": 1.0, "weight_source": "unweighted geomean (COMMANDMENT); weighted = equal-weight ratio-of-sums"},
+    {"name": "tpr4096", "baseline_ms": 3.2135, "optimized_ms": 2.0204, "speedup": 1.5905, "weight": 1.0, "weight_source": "unweighted geomean (COMMANDMENT); weighted = equal-weight ratio-of-sums"}
+  ],
+  "status": "partial",
+  "measurement_valid": true,
+  "patch_file": "best_patch.diff",
+  "strategies_tried": [
+    "P4-LAUNCH: v3 rescale fold + half-step B + 2-stage A ring (LDS 21504, 187 VGPR, 2 WG/CU): s2 401/737 vs 400/731 us, neutral",
+    "P4-LAUNCH: v3 + waves_per_eu=3 -> 3 WG/CU at 168 VGPR, spills only in prologue/epilogue: s2 424/760 us, +6%/+4% slower; SQ_WAIT_ANY 0.27->0.57, MFMA util 0.54->0.49, sclk under cap 1.10->0.98 GHz",
+    "P1-REUSE: v3 B prefetch depth 1-front/3/4: neutral or slower",
+    "P1: tile_n=128 (direction alternative): 512 VGPR + 1400 B scratch, 5x slower",
+    "P1-REUSE: m2 8-wave CTA over 2 M-blocks sharing B via L1: L2 requests -25%, but 1 CTA/CU means +40% cycles; s2 +17%/+12% slower",
+    "P2-MEM: cache policy nt on A2 / nt on W2 / sc1 on W2: +6-8% / +7-10% / 0",
+    "P3-COMP: explicit 2-wide packed rescale: identical ISA, backend re-scalarizes",
+    "P4: s_setprio main loop (shipped): s2 -1.0..1.5%, forward -0.29%/-1.11% vs same-session canonical over 8 interleaved official rounds",
+    "DIAG: power/clock at cap with timing-only knobs: B stream ~14.5%, A stream ~6%, rescale VALU ~8.6% of s2 time"
+  ],
+  "notes": "s2 runs pinned at the 750 W cap (rocm-smi 749-751 W, sclk ~1.1 GHz, MFMA busy ~54% of cycles), so it is energy-bound, not latency-bound. A 3rd WG/CU was reached (LDS 21504 B, 168 VGPR, waves/busy 17.6->26.2) but made s2 4-6% slower: per-wave memory waits doubled and the clock dropped. Do not pursue occupancy on s2 or gemm1. Energy shares of s2 time at the cap (timing-only knobs): B weight stream ~14.5% (L1-hot B: 345 us at 1.22 GHz vs 402 us at 1.10 GHz), A stream ~6%, per-kb rescale VALU ~8.6% (the backend emits 3 VALU per f32x4 instead of 2 packed). L1 does merge duplicate B loads (m2 cut L2 requests 25%), but an 8-wave 1-CTA/CU layout costs more cycles than it saves. Next lever: >=128 rows per B load with independent 4-wave CTAs, i.e. each wave 128x64 with 128 accumulators. This is only feasible with the rescale fold in exploration_full_v3_variants.diff, plus a tile_k=64 ring and an 8 KB table to stay <=32 KB LDS; it needs an expert-straddle path and pays a tail round at tpr2048. Shipped gain is small (+0.7% geomean vs same-session canonical; 1.5459x vs frozen baseline, above the 1.528x bar). Full variants: exploration_full_v3_variants.diff. Harness: tools/ab_s2.py."
+}

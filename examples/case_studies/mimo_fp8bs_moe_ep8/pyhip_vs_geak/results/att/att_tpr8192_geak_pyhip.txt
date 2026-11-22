@@ -1,0 +1,18 @@
+
+kernel                 disp       waves MFMA/w |        prolog        |       mainloop       |        epilog        |  wave  cycles  empty  SIMD   GHz
+                             work/empty        |    share cyc MFMA    |    share cyc MFMA    |    share cyc MFMA    |  MFMA                 MFMA
+down_kernel_0           802   462/2704    2048 |  7.2%    6.4k  4.0% | 78.0%   69.6k 93.4% | 14.8%   13.2k  1.9% | 73.5%   89.2k   2.4% 57.7%  1.01
+down_kernel_0           812   446/3420    2048 |  6.8%    6.1k  4.2% | 77.9%   69.8k 93.2% | 15.3%   13.7k  1.9% | 73.2%   89.6k   3.1% 60.4%  1.00
+down_kernel_0           822   472/2208    2048 |  7.0%    6.2k  4.1% | 78.3%   69.6k 93.4% | 14.7%   13.1k  2.0% | 73.7%   89.0k   2.0% 61.7%  0.97
+gateup_kernel_0         801   462/3336    4096 |  4.6%    7.3k  3.5% | 88.3%  140.8k 92.7% |  7.2%   11.4k  2.2% | 82.2%  159.5k   1.7% 71.6%  1.12
+gateup_kernel_0         811   456/2890    4096 |  4.7%    7.4k  3.4% | 88.1%  140.6k 92.8% |  7.2%   11.5k  2.2% | 82.1%  159.6k   1.5% 74.7%  0.97
+gateup_kernel_0         821   466/2470    4096 |  4.7%    7.5k  3.4% | 88.0%  140.6k 92.8% |  7.3%   11.6k  2.2% | 82.0%  159.8k   1.3% 74.4%  0.98
+moe_fp8bs_gemm1_0       759   881/5896    2013 |  7.5%    6.0k 47.4% | 85.8%   68.5k 82.5% |  6.7%    5.4k 55.2% | 78.0%   79.9k   1.2% 74.4%  1.08
+moe_fp8bs_gemm1_0       763   875/6077    2029 |  6.9%    5.4k 48.3% | 86.3%   67.3k 83.6% |  6.8%    5.3k 55.0% | 79.2%   78.0k   1.2% 75.7%  0.91
+moe_fp8bs_gemm1_0       767   879/6145    2031 |  6.9%    5.5k 50.3% | 86.3%   68.7k 84.1% |  6.8%    5.4k 57.5% | 80.0%   79.6k   1.2% 76.8%  0.91
+moe_s2_fp8bs_0          760   867/18      1016 |  7.9%    3.4k 59.4% | 74.6%   31.9k 77.9% | 17.6%    7.5k 59.2% | 73.2%   42.8k   0.0% 72.6%  0.99
+moe_s2_fp8bs_0          764   915/24      1016 |  7.9%    3.3k 60.0% | 74.6%   31.3k 78.1% | 17.4%    7.3k 59.9% | 73.5%   42.0k   0.0% 73.3%  0.90
+moe_s2_fp8bs_0          768   878/2       1012 |  7.9%    3.3k 59.2% | 74.7%   31.5k 78.2% | 17.4%    7.3k 59.7% | 73.5%   42.1k   0.0% 73.2%  0.91
+share = phase cycles / working-wave cycles; cyc = mean cycles per working wave; MFMA = SIMD MFMA busy in the phase;
+wave MFMA = over the whole working wave; empty = cycles of MFMA-free (exiting) waves / all traced wave cycles;
+SIMD MFMA = MFMA busy over each traced SIMD's span from its first wave start to its last wave end

@@ -1,0 +1,42 @@
+{
+ "engineer_id": "r4_d2",
+ "specialty": "memory",
+ "task": "Repair the gemm1 pad-skip's energy leak: spill-free tail bodies, keep tail CTAs inside the W-panel L2 window, cache-policy what-ifs on gemm1 streams",
+ "strategy": "flydsl_moe_fp8bs.py (gemm1) only, 3 knobs default-ON, all in _G1_KNOBS: FBS_PS_PRO=1 branches before the prologue so every padskip variant owns its X-tile-0 load + 2-deep B prefetch queue (35 spills/120 B scratch -> 0, 246 VGPR, full-body census = no-skip body); FBS_PS_SLEEP=8,12 adds s_sleep 8/12 at the end of every K tile of the 2-/1-subtile tail bodies (tails 0.85-0.9x of a full CTA instead of 0.71-0.80x); FBS_PADZERO=1 gathers padding rows' X out of range (zeros, no memory access). FBS_PS_PRO=0 FBS_PS_SLEEP=0 FBS_PADZERO=0 reproduces the R3 ISA byte-for-byte.",
+ "speedup_geomean": 1.6323,
+ "speedup_arithmetic": 1.6328,
+ "speedup_weighted": 1.6318,
+ "per_case": [
+  {
+   "name": "tpr2048",
+   "baseline_ms": 1.6747,
+   "optimized_ms": 1.0526,
+   "speedup": 1.591,
+   "weight": 1.0,
+   "weight_source": "unweighted geomean (COMMANDMENT METRIC); optimized_ms = pooled median of 18 interleaved COMMANDMENT rounds (GPU1 x8, GPU2 x10)"
+  },
+  {
+   "name": "tpr4096",
+   "baseline_ms": 3.2135,
+   "optimized_ms": 1.9189,
+   "speedup": 1.6747,
+   "weight": 1.0,
+   "weight_source": "unweighted geomean (COMMANDMENT METRIC); optimized_ms = pooled median of 18 interleaved COMMANDMENT rounds (GPU1 x8, GPU2 x10)"
+  }
+ ],
+ "status": "partial",
+ "measurement_valid": true,
+ "patch_file": "best_patch.diff",
+ "strategies_tried": [
+  "P1-REUSE step1: per-variant prologue (FBS_PS_PRO) -> 0 spills; forward neutral alone (-0.14% +-0.2), 4096 misses -0.4M, EA writes to ps0 level",
+  "P1-REUSE step1 alt: LLVM simplifycfg-hoist-common=0 (2 spills), PS_PRO+hoist-off (228 VGPR, 0 spills), reduced-body BPF=1 (228 VGPR)",
+  "P2-MEM step2: fixed s_sleep pacing of tail bodies 4,6 / 6,9 / 8,12 / 10,15 / 12,18 / 16,24 -> 8,12 best (-0.4..-0.7M misses)",
+  "P2-MEM step2: self-timed pacing FBS_PS_PACE (s_memtime spin, tails 0.96-1.15x of full) -> same misses as 8,12, no better forward",
+  "P2-MEM step2: 4,1-only + pacing -> fewer misses but loses the 2-subtile MFMA cut (-0.14%)",
+  "P3-COMP: FBS_PADZERO zero-operand padding rows -> <=+0.15% alone (data-dependent MFMA power is small), kept (free)",
+  "P2-MEM step3: cache policy W13 nt -24%/-20%, X nt -7%, W sc0/sc1, X sc1, a2/a2s store nt / sc0|sc1 within +-0.4% -> none shipped",
+  "P2-MEM what-if: global lockstep (FBS_PACE_FULL speed limit on full bodies, inline-asm spin) -> misses at/below no-skip level but forward -0.1..-2.0%",
+  "diagnostic: FBS_DBG_TS per-CTA s_memrealtime/s_memtime/HW_ID/XCC_ID timelines (tools/tsdump.py) -> mechanism measured"
+ ],
+ "notes": "Deliverables in round_4/engineer_2: best_patch.diff (lean, applies to 31c4cb1 with patch -p1; fresh tree PASS), checkpoints.log (one measured verdict per step), l2/l2_before_after.txt (L2 arms before/after), isa/census_summary.txt (per-variant ISA census), r4d2_selftimed_pace_globalpace_cachepolicy_dbgts_NOT_A_CANDIDATE.diff (all experimental knobs, default off). DECISIVE: 18 interleaved COMMANDMENT rounds, one lease per session (GPU1 x8, GPU2 x10): canon 1.0541/1.9258 ms (1.6282x) vs cand 1.0526/1.9189 ms (1.6323x); paired tpr2048 +0.29% (15/18 wins), tpr4096 +0.23% (14/18), geomean +0.25% (15/18); null arm -0.04%. Target +0.8% NOT met. Kernel trace (220 dispatches x3 pairs): gemm1 -0.1%/-0.2%, s2 unchanged. L2 (same session): gemm1 misses 12.36,12.00 -> 11.58,11.59 M (2048) and 17.81,17.91 -> 17.20,17.16 M (4096) vs no-skip 10.42/16.63: excess -33%/-55%; EA writes 0.664/1.203 -> 0.575/1.111 M (= no-skip). Correctness: COMMANDMENT PASS (rel_l2 2.315e-3/2.307e-3 unchanged), ext_correct 24/24 PASS, FBS_PADSKIP=0 PASS, MOE_FAST_SORT=0 PASS, knobs-off PASS. MECHANISM (measured with per-CTA timestamps): XCD == CTA id % 8 (100%); full CTA = 80-83K shader cycles, clock-invariant; unpaced 1-/2-subtile tails last 0.71-0.80x, finish ~14 us before their siblings, and widen the median same-panel sibling start spread from 2 us to 6-10 us (dispatch-rhythm perturbation of the one-shot grid). The 35 spills explain ~0 of the 2048 miss excess and ~30% at 4096. Sleeping tails let their co-resident CTAs run 5-11% faster, which keeps ~1/3-2/3 of the excess. Global lockstep proves the excess can be removed (misses at/below no-skip) but the enforced pace costs more time than ~1-1.4M misses (mostly MALL-hit re-fetches) are worth. Cache policy: nt on W13 loads costs 20-24% and nt on X 7% (L2 reuse across sibling CTAs is essential); all other bits are noise. For the TechLead: the remaining gap between the skip's MFMA cut and its forward gain is not recoverable by pacing or cache policy; the per-CTA timeline tool (FBS_DBG_TS in the NOT_A_CANDIDATE diff) is reusable for any grid-order/desync question."
+}

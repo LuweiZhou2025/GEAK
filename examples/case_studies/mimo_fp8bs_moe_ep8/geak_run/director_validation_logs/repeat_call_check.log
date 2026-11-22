@@ -1,0 +1,10 @@
+[aiter] WARNING: NUMA balancing is enabled, which may cause errors. It is recommended to disable NUMA balancing by running "sudo sh -c 'echo 0 > /proc/sys/kernel/numa_balancing'" for more details: https://rocm.docs.amd.com/en/latest/how-to/system-optimization/mi300x.html#disable-numa-auto-balancing
+[aiter] import [module_aiter_core] under /sgl-workspace/aiter/aiter/jit/module_aiter_core.so
+[92mSuccessfully preprocessed all matching files.[0m
+PASS tpr2048 set0 (after repeated calls): rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)
+PASS tpr2048 set1 (after repeated calls): rel_l2=2.305e-03 (tol 0.02) max_token_rel=1.213e-02 (tol 0.05)
+PASS tpr2048 set0 (after repeated calls): rel_l2=2.315e-03 (tol 0.02) max_token_rel=1.168e-02 (tol 0.05)
+PASS tpr4096 set0 (after repeated calls): rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)
+PASS tpr4096 set1 (after repeated calls): rel_l2=2.314e-03 (tol 0.02) max_token_rel=1.338e-02 (tol 0.05)
+PASS tpr4096 set0 (after repeated calls): rel_l2=2.307e-03 (tol 0.02) max_token_rel=8.024e-03 (tol 0.05)
+RepeatCall: PASS

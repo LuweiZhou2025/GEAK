@@ -1,0 +1,43 @@
+{
+  "engineer_id": "r1_d1",
+  "specialty": "host_runtime",
+  "task": "Delete satellite zero-fill and empty-CTA waste around the GEMMs (P23 zero-fill into gemm1; price/right-size gemm1 grid; cheap sorting A/B)",
+  "strategy": "Custom bit-identical 2-kernel HIP align&sort (moe_sort_fast.py) replacing CK ClearWorkspace+P0+P1+P23; moe_buf zero-fill moved into gemm1 (masked 16-B stores spread over the first 8 K tiles, grid-tail CTAs cover any remainder), sorting gets no fill; env-gated single-owner switch MOE_ZF_OWNER=gemm1|sort|ck; s1v2 path keeps CK sorting+fill.",
+  "speedup_geomean": 1.5447,
+  "speedup_arithmetic": 1.5453,
+  "speedup_weighted": 1.5442,
+  "per_case": [
+    {
+      "name": "tpr2048",
+      "baseline_ms": 1.6747,
+      "optimized_ms": 1.1134,
+      "speedup": 1.5041,
+      "weight": 1.0,
+      "weight_source": "uniform (COMMANDMENT METRIC = unweighted geomean)"
+    },
+    {
+      "name": "tpr4096",
+      "baseline_ms": 3.2135,
+      "optimized_ms": 2.0256,
+      "speedup": 1.5864,
+      "weight": 1.0,
+      "weight_source": "uniform (COMMANDMENT METRIC = unweighted geomean)"
+    }
+  ],
+  "status": "success",
+  "measurement_valid": true,
+  "patch_file": "best_patch.diff",
+  "strategies_tried": [
+    "P0-ALG: zero-width moe_buf pricing (CK P23 fill = -8/-31 us wall, not 32-44/63-85)",
+    "P4-LAUNCH: gemm1 grid cap 544 M-blocks no-sync = ~0 (+4.4/-6.5 us); host-sync exact grid -25..-32 us gemm1 trace was an idle-gap clock artifact",
+    "P4-LAUNCH: sync-free on-device M-block grid-stride loop in gemm1 = ~5% regression (dropped)",
+    "P5-TUNE: AITER_USE_OPUS_MOE_SORTING=1 = verbatim CK port, same time; dispatch_policy=1 = 1.86/3.87 ms per sort; dp=2 = same mp path",
+    "P0-ALG: custom 2-kernel align&sort, bit-identical to CK: 16.0/16.8 us vs CK 20.1/31.4 (no fill) / 39.0/67.5 (fill), GPU time warm",
+    "P0-ALG: 1-kernel sort with self-resetting grid barrier: no faster than 2 kernels (dropped)",
+    "P2-MEM: gemm1 zero-fill placement sweep (kernel start / after prologue / end / spread over 8 K tiles / grid-tail CTAs): spread best; in-situ fill cost 6-27 us",
+    "P2-MEM: zero-store cache policy nt / sc0 / sc1 / sc0|sc1(|nt): no gain",
+    "P2-MEM: P23-style fill blocks in the fast-sort placement kernel (304/608/1216 blocks): ~equal to gemm1 fill (kept as MOE_ZF_OWNER=sort)",
+    "P2-MEM: allocation order identical to CK (moe_buf after sort outputs): no measurable change"
+  ],
+  "notes": "Final same-session official A/B (6 rounds, interleaved) vs canonical current best: tpr2048 1.1193->1.1134 ms (+0.53%), tpr4096 2.0400->2.0256 ms (+0.71%), geomean 1.5352x->1.5447x (+0.62%); faster in 6/6 rounds on both cases. Correctness PASS (bit-identical error) for default and all env variants; strict NaN-poison tests confirm exact zero coverage of rows [0,T) and untouched rows >= T, including a degenerate remainder case. Dispatches/forward 6->4. Key insight: rocprofv3 inflates small kernels ~5 us each, so P23 fill was really 8/31 us and the empty-CTA tail ~0; the target 1.03x was based on profiler-inflated numbers. gemm1 fill raises gemm1 to 128 arch VGPR (256 combined, still 2 waves/SIMD, zero headroom); MOE_ZF_OWNER=sort (fill blocks in the fast-sort kernel) is a near-equal alternative (official A/B 1.1137/2.0265) that leaves gemm1 untouched at 112 VGPR. The fast sort builds via torch load_inline into the per-workspace TORCH_EXTENSIONS_DIR (~30 s first build) and falls back to CK sorting on failure. The s1v2 path is untouched (CK sorting with its fill). gemm1 launcher now takes arg_zbuf (moe_buf.view(-1)) after num_valid_ids."
+}

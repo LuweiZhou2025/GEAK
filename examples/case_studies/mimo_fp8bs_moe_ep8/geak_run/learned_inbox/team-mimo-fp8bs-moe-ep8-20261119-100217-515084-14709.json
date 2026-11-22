@@ -1,0 +1,73 @@
+{
+  "run_id": "team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709",
+  "date": "2026-11-19",
+  "kernel_names": [
+    "mimo_fp8bs_moe_ep8"
+  ],
+  "validation_status": "accepted",
+  "box_quiet": true,
+  "held_out": false,
+  "citations": [],
+  "cards": [
+    {
+      "name": "rank-levers-by-energy-removed-once-the-power-cap-binds-e2e-gfx942-compute-bound",
+      "description": "Power-capped fp8 block-scale MoE GEMM pair, gfx942: scalar-FMA rescale, VALU strip, padding-MFMA skip, 2-kernel sort paid +6.3%; L2-miss cuts did not",
+      "keywords": [
+        "moe",
+        "grouped-gemm",
+        "fp8-blockscale",
+        "power-cap",
+        "mfma",
+        "packed-valu",
+        "mfma-interlock",
+        "instruction-schedule",
+        "waves-per-eu",
+        "padding-skip",
+        "l2-residency",
+        "xcd-remap",
+        "dispatch-collapse",
+        "compute-bound",
+        "gfx942",
+        "flydsl"
+      ],
+      "kernels": [
+        "moe_fp8bs_gemm1_0",
+        "moe_s2_fp8bs_0",
+        "k_place",
+        "k_count"
+      ],
+      "platforms": [
+        "gfx942"
+      ],
+      "kernel_class": "e2e",
+      "regime": "compute-bound",
+      "key": "fp8 block-scale (128x128 weight, 1x128 activation) two-stage fused-MoE GEMM pair in FlyDSL on gfx942/MI300X, MFMA-bound against a binding socket power cap, after the native-fp8 rewrite to 2 waves/SIMD has landed",
+      "lifecycle": "active",
+      "layer": "learned",
+      "levers": [
+        "compute.valu-reduction",
+        "algo.padding-skip",
+        "host.dispatch-count"
+      ],
+      "cost": "L3",
+      "type": "lever",
+      "confidence": "★★",
+      "attempts": 1,
+      "confirms_cited": 0,
+      "confirms_blind": 0,
+      "losses": 0,
+      "effect": "1.62x geomean vs the frozen vendor baseline, director-verified (per-case 1.58x at 2048 and 1.67x at 4096 tokens per rank); this lane added +6.3% (per-case +5.7% / +6.9%, cross-session) over a warm-started two-stage at 1.53x, each landed step winning 86-100% of its interleaved same-session paired rounds",
+      "roofline": "fp8-MFMA-bound at a binding socket power cap before and after, sustained clock about half of max; first-GEMM MFMA-busy 61-66% -> 65-74% and issue-wait 56% -> 49%; EA traffic 35-40% of peak; 2 waves/SIMD throughout; cutting 9.5-9.9% of cycles per forward bought only 3.4-3.9% of time, so time tracks energy per forward",
+      "verified_on": "2026-11-19",
+      "last_seen": "2026-11-19",
+      "title": "Rank levers by energy removed once the power cap binds",
+      "lever": "Once an fp8 block-scale MoE GEMM pair is MFMA-bound against a binding socket power cap, time per forward tracks energy per forward, so rank candidates by the energy they remove: removed MFMA work, HBM bytes and memory-side atomics converted about 1:1; letting the first GEMM issue MFMAs more densely converted about 45%; pure stall or nop cuts and L2 misses the device-wide cache already served converted about 0. The largest single step on gfx942 was emitting the per-K-block fp32 rescale as per-element scalar FMAs, because packed-FP32 VALU waits for the MFMA pipe to drain while two scalar FMAs co-issue almost free.",
+      "apply": "Scalar rescale = one llvm.fma per accumulator element inside the K loop (packed FP32 outside it measured neutral), plus waves_per_eu=2 to hold 2 waves/SIMD; setprio wraps the whole K loop; in the second GEMM a per-column-block scale-product table in LDS turns the rescale into one bare FMA and absorbs the routing weight; the sort writes a valid-row count per M block that each GEMM s_loads to branch uniformly to a full, 2-subtile or 1-subtile body; a 2-kernel count/place sort owns the zero-fill and strides every loop by its own grid.",
+      "stack": "total 1.62x vs the frozen vendor baseline (director-verified); about 1.53x of it is the warm-started native-fp8 rewrite (covered separately) and +6.3% came from four directions over two rounds\n  - 1. second-GEMM VALU strip under whole-K-loop setprio (scale-product table, folded routing weight, leaner epilogue, 1 VALU per MFMA slot): +1.82% same-session (round 2, verified)\n  - 2. 2-kernel count/place sort owning the zero-fill, 6 -> 4 dispatches: +0.65% alone, +0.61-0.70% on top of (1) (round 2, verified)\n  - 3. first-GEMM per-element scalar-FMA rescale (+2.30% alone), then a maxnum row-max epilogue and whole-K-loop setprio: +2.78% same-session (round 3, verified)\n  - 4. sort-emitted valid-row count driving an all-padding-subtile skip: second GEMM +0.71% (verified), +0.61% on top of (3); the first-GEMM skip added +0.31% (round 3, integrated)\n  - note: incremental in landing order; rounds compare across sessions (~1% drift). A later stack (single-expert rows as plain stores + multi-row-only fill, second-GEMM scalar rescale, skip repair) verified +1.76-1.92% same-session but is outside the total: it missed the +2% commit gate by 0.14%",
+      "verify": "Check engagement in the ISA before timing (no v_pk_fma_f32 inside the MFMA loop, one scalar FMA per MFMA, 0 spills at 2 waves/SIMD, full-body ISA unchanged by the skip variants) and in the trace (both GEMMs by name, dispatch count); then time the whole forward: 12-30 interleaved paired rounds with rotating arm order, pooled over 2-4 GPUs with a null arm, every arm from a frozen source snapshot because the DSL traces source at first call.",
+      "pitfall": "An earlier steer to pack the rescale into v_pk_fma_f32 was inverted: the fully scalar form made the GEMM 3.5-3.8% faster → on gfx942 packed FP32 waits for the matrix pipe to drain (an MFMA + pk-FMA pair costs ~1.8x the cycles of MFMA + 2 scalar FMAs) and LLVM unpacks FP32 inside MFMA shadows on purpose → micro-bench the co-issue pair first, then emit scalar FMAs\n- pitfall: The same swap in the second GEMM cut that kernel 1.6-1.9% but the forward only ~0.2%, and an isolated first-GEMM A/B overstated its forward gain ~2x → under the cap the next kernel inherits the lower clock → judge every kernel change at the forward level\n- pitfall: Moving the scale product into LDS lost 16% → it pushed the second GEMM to 272 VGPR and 1 wave/SIMD → pin waves_per_eu=2 in the same change\n- pitfall: Per-tile s_setprio lost ~5% → setprio is a scheduling-region boundary that cuts each tile's sched_group_barrier pattern off its MFMAs → wrap the whole K loop once\n- pitfall: The first-GEMM padding skip cut MFMA rows 3.5% / 1.9% but returned only 20-30% of that → early-exiting tail CTAs desync their same-weight-panel siblings in the one-shot grid (+16% / +8% L2 misses) and the variant bodies spilled → a per-variant prologue (0 spills) plus short s_sleep tail pacing cut the L2-miss excess by a third to a half (+0.25-0.36% forward); variant sets other than 4,2,1 perturbed the full body's register allocation\n- pitfall: CTA reorders that cut first-GEMM L2 misses by up to a quarter returned at most +0.27%, or lost 1.4% behind a dependent remap prologue → the removed misses were cross-XCD re-fetches the device-wide Infinity Cache already served, while sibling-CTA weight-panel sharing is load-bearing (non-temporal weight loads cost 20-24%) → count bytes at HBM, not L2 misses",
+      "caution": "Also verify that the power cap actually binds (sustained socket power at the limit, clock far below max) before ranking by energy, since unthrottled stall cuts should convert normally; and also verify the target has no scaled-MFMA path for the block scales before porting the scalar-FMA step (on gfx942 one scalar FMA per MFMA was irreducible).",
+      "source": "run team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709, 2026-11-19, gfx942/MI300X, 5 rounds / 12 directions, director-validated geomean 1.6244x (accepted, correctness pass); tech_lead_report.md, insight_log.md, round_3_shift_analysis.md"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "engineer_id": "r3_d1",
+  "specialty": "algorithm",
+  "task": "Skip all-padding 16-row MFMA subtiles via sort-emitted per-block valid-row counts: ship in s2, price on gemm1",
+  "strategy": "moe_sort_fast k_place emits blk_cnt[m]=min(64, base+cnt-m*64) (new int32 array, sort_grid-strided le-loop, existing outputs bit-identical to CK); moe_s2_fp8bs_0 s_loads the count next to the expert id and selects with uniform SCC branches between the unchanged full m_repeat=4 body and 2-/1-subtile copies of the K loop + epilogue (skip MFMA, A ds_reads, scale reads, rescale FMAs; epi3 row-half 1 skipped when <=2 subtiles active). S2_PADSKIP=4,2,1 default-ON; full-body ISA unchanged (1024 MFMA/668 fma/178 pk_fma, 246 VGPR, 0 spill, 32 KB LDS); CK fallback runs without the skip.",
+  "speedup_geomean": 1.5827,
+  "speedup_arithmetic": 1.5832,
+  "speedup_weighted": 1.5821,
+  "per_case": [
+    {
+      "name": "tpr2048",
+      "baseline_ms": 1.6747,
+      "optimized_ms": 1.0866,
+      "speedup": 1.5412,
+      "weight": 1.0,
+      "weight_source": "unweighted geomean (COMMANDMENT); pooled medians of 10 interleaved COMMANDMENT rounds"
+    },
+    {
+      "name": "tpr4096",
+      "baseline_ms": 3.2135,
+      "optimized_ms": 1.9773,
+      "speedup": 1.6252,
+      "weight": 1.0,
+      "weight_source": "unweighted geomean (COMMANDMENT); pooled medians of 10 interleaved COMMANDMENT rounds"
+    }
+  ],
+  "status": "success",
+  "measurement_valid": true,
+  "patch_file": "best_patch.diff"
+}

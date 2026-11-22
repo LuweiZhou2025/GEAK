@@ -1,0 +1,56 @@
+{
+  "phase": "baseline",
+  "round": 0,
+  "bottleneck": "compute",
+  "sub_case": "issue/occupancy-limited MFMA (1 wave/SIMD)",
+  "profiler_used": "rocprofv3",
+  "profiler_note": "rocprof-compute (first in CDNA priority) exited 1 — missing python TUI deps (dash-svg, dash>=3.0.0, kaleido, textual, sqlalchemy) in /opt/rocm-7.2.0 rocprofiler-compute requirements; auto-degraded to rocprofv3 --kernel-trace --stats (durations + dispatch shape + VGPR/LDS/grid from trace; NO SoL VALU/VMEM/MFMA/cache counters). Expected per COMMANDMENT PROFILE note.",
+  "device": "AMD Instinct MI300X / gfx942 / CDNA3, 304 CU, wave64, 8 waves/SIMD max, 64KB LDS/CU, HBM ~5.3TB/s, fp8=FNUZ",
+  "physical_cu_count": 304,
+  "dispatch_count": 6,
+  "dispatch_note": "Hot forward path launches ~6 device kernels: MoeSortingClearWorkspace, MoeSorting P0/P1/P23, partial_transpose, then the fused aiter fmoe GEMM. The fmoe GEMM dominates, so this is NOT overhead-bound. Separately, eager activation fp8 block-scale quant (abs/reduce-max/div/clamp/float8_copy, 64-72 calls each) adds ~20-26% of profiled device time in many small dispatches.",
+  "key_metrics": {
+    "valu_pct": 0.0,
+    "vmem_pct": 0.0,
+    "lds_pct": 0.0,
+    "hbm_gbps": 0.0,
+    "l2_hit_pct": 0.0,
+    "vgpr": 128,
+    "accum_vgpr": 384,
+    "combined_vgpr": 512,
+    "sgpr": 112,
+    "lds_bytes_per_wg": 65536,
+    "scratch_bytes": 0,
+    "counters_note": "VALU/VMEM/LDS/HBM/L2 SoL unavailable (rocprof-compute degraded). Values from kernel_trace for the dominant fmoe kernel."
+  },
+  "fmoe_kernel": {
+    "name": "aiter::fmoe_bf16_blockscaleFp8_g1u1_vs_silu_1tg_ps_32x256",
+    "pct_of_total": 59.29,
+    "calls": 12,
+    "avg_ms": 2.455,
+    "per_case_ms": {"tpr2048": 1.540, "tpr4096": 3.304},
+    "workgroup_size": 256,
+    "grid_threads": 77824,
+    "workgroups": 304,
+    "ctas_vs_cu": "304 WG / 304 CU = 1 WG per CU (GPU filled; no split-K needed)",
+    "occupancy": "combined VGPR 512 (arch 128 + accum 384) and 64KB LDS/WG both pin it to 1 wave/SIMD (12.5%). This is the limiter: no spare waves to hide MFMA/data-dep latency."
+  },
+  "top_kernels": [
+    {"name": "aiter::fmoe_bf16_blockscaleFp8_g1u1_vs_silu_1tg_ps_32x256", "pct_of_total": 59.29},
+    {"name": "elementwise DivFunctor (act fp8 blockscale quant)", "pct_of_total": 6.56},
+    {"name": "AbsFunctor (act quant amax)", "pct_of_total": 5.43},
+    {"name": "MulFunctor (act quant scale)", "pct_of_total": 4.67},
+    {"name": "reduce MaxNanFunctor (act quant amax)", "pct_of_total": 4.33},
+    {"name": "float8_copy_kernel (act quant cast)", "pct_of_total": 3.39}
+  ],
+  "per_case_latency_ms": {"tpr2048": 1.8497, "tpr4096": 3.2851},
+  "baseline_frozen_ms": {"tpr2048": 1.6747, "tpr4096": 3.2135},
+  "current_best_bar": 1.5397,
+  "top_opportunities": [
+    "Replace the aiter asm fmoe path with the FlyDSL native-fp8 two-stage MoE: the dominant kernel runs at 1 wave/SIMD (combined 512 VGPR + 64KB LDS/WG). Raising occupancy 1->2 waves/SIMD + MFMA util 33%->60% was the prior committed 1.5397x win — recreate flydsl_moe_fp8bs_s1v2.py (currently absent from workspace, so the live path is the slow aiter asm baseline).",
+    "Stage1: raise the M tile / use the 128-row transposed stage1 (weights=MFMA src-A, tokens=src-B, one token/lane so activation block-scale is a per-lane scalar) to share the streamed B (weights) operand through LDS/registers and halve B stream per FLOP — the streamed-B-per-FLOP is the issue-bound limiter.",
+    "Trim VGPR to <=170 on the winning stage1 to unlock a 3rd wave/SIMD for more latency hiding (currently ~240 VGPR on the FlyDSL path, 512 combined on the aiter asm kernel -> only 1-2 waves).",
+    "Fuse the eager activation fp8 block-scale quant (abs->reduce-max->div->clamp->float8_copy, ~20-26% of device time across many small dispatches) into the kernel or fewer fused ops; it inflates the tpr2048 forward by ~0.3ms (~17% of that case, the gap between fmoe 1.54ms and measured 1.85ms)."
+  ],
+  "summary_path": "/sgl-workspace/GEAK/exp/team_mimo_fp8bs_moe_ep8_20261119_100217_515084_14709/mimo_fp8bs_moe_ep8/profiling_summary.md"
+}
